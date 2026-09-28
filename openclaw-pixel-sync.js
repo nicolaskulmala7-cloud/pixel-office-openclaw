@@ -432,6 +432,78 @@ const ERROR_WINDOW_MS = 10 * 60 * 1000;
 const WORK_VERB = { coordinator: 'WORKING', researcher: 'RESEARCHING', writer: 'WRITING', reviewer: 'REVIEWING' };
 const TASK_STATUS_MAP = { succeeded: 'completed', blocked: 'waiting_approval' };
 
+// Durable task outputs -> Business OS Bridge inbox.
+// The bridge itself performs validation, secret checks, Git commit/push and idempotency.
+const BUSINESS_OS_EVENT_INBOX =
+  process.env.BUSINESS_OS_EVENT_INBOX ||
+  path.join(os.homedir(), '.local', 'share', 'business-os-bridge', 'inbox');
+
+const DURABLE_TERMINAL_STATUSES = new Set([
+  'completed', 'failed', 'timed_out', 'cancelled', 'lost'
+]);
+
+const durableEmitted = new Set();
+
+const isoTime = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString();
+};
+
+const durableEventType = (task) => {
+  if (task.status !== 'completed') return 'task_failed';
+
+  if (['researcher', 'market_trader', 'crypto_analyst', 'memecoin_scout', 'sports_analyst'].includes(task.agentId)) {
+    return 'research_completed';
+  }
+
+  if (task.agentId === 'reviewer') return 'review_completed';
+  if (task.agentId === 'writer' || task.agentId === 'coordinator') return 'report_completed';
+
+  return 'task_completed';
+};
+
+const emitDurableTask = (task) => {
+  if (!task || !DURABLE_TERMINAL_STATUSES.has(task.status)) return;
+  if (!task.id || !task.agentId) return;
+
+  const eventId = `openclaw-task-${task.id}`;
+  if (durableEmitted.has(eventId)) return;
+
+  const resultText = task.summary || task.error || 'Task completed without a terminal summary.';
+
+  const event = {
+    event_id: eventId,
+    task_id: task.id,
+    agent_id: task.agentId,
+    event_type: durableEventType(task),
+    title: task.title || `OpenClaw task ${task.id}`,
+    summary: task.summary || '',
+    body_markdown:
+      `## OpenClaw task result\n\n${resultText}` +
+      (task.error ? `\n\n## Error\n\n${task.error}` : ''),
+    related_notes: [],
+    created_at: isoTime(task.createdAt),
+    completed_at: isoTime(task.endedAt),
+    status: task.status === 'completed' ? 'COMPLETED' : 'FAILED',
+    metadata: {
+      openclaw_status: task.status,
+      kind: task.kind,
+      runtime: task.runtime,
+      tool_use_count: task.toolUseCount,
+      parent_task_id: task.parentTaskId
+    }
+  };
+
+  fs.mkdirSync(BUSINESS_OS_EVENT_INBOX, { recursive: true, mode: 0o700 });
+
+  const target = path.join(BUSINESS_OS_EVENT_INBOX, `${eventId}.json`);
+  writePrivateJSON(target, event);
+
+  durableEmitted.add(eventId);
+  log(`[business-os] queued durable output ${eventId} (${task.agentId}/${event.event_type})`);
+};
+
 const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : undefined);
 const sanitizeTask = (t) => {
   if (!t || typeof t.id !== 'string') return null;
@@ -444,13 +516,20 @@ const sanitizeTask = (t) => {
     error: str(t.error, 300), toolUseCount: t.toolUseCount, parentTaskId: str(t.parentTaskId, 80)
   };
 };
-const upsertTask = (raw) => {
+const upsertTask = (raw, { emitDurable = false } = {}) => {
   const t = sanitizeTask(raw);
   if (!t) return false;
+
   const prev = tasks.get(t.id);
-  if (prev && JSON.stringify(prev) === JSON.stringify(t)) return false;
-  tasks.set(t.id, t);
-  return true;
+  const changed = !prev || JSON.stringify(prev) !== JSON.stringify(t);
+
+  if (changed) tasks.set(t.id, t);
+
+  // Only the live task-event path opts into durable emission.
+  // Periodic tasks.list reconciliation therefore cannot dump old tasks into Business OS.
+  if (emitDurable) emitDurableTask(t);
+
+  return changed;
 };
 const recentTasks = () => [...tasks.values()]
   .sort((a, b) => (b.startedAt || b.createdAt || 0) - (a.startedAt || a.createdAt || 0))
@@ -808,7 +887,7 @@ const connect = () => {
     } else if (frame.event === 'task' && payload && payload.task) {
       if (payload.action === 'deleted' || payload.action === 'removed') {
         if (tasks.delete(payload.task.id)) scheduleTaskFeed();
-      } else if (upsertTask(payload.task)) {
+      } else if (upsertTask(payload.task, { emitDurable: true })) {
         scheduleTaskFeed();
       }
       pushAllStatuses();
