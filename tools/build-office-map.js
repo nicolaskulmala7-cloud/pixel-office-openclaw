@@ -93,6 +93,11 @@ const IDLE_TARGETS = [
   { x: 8, y: 23 }, { x: 9, y: 23 }, { x: 10, y: 23 }, { x: 11, y: 23 }
 ];
 const AGENT_ORDER = ['coordinator', 'researcher', 'writer', 'reviewer'];
+// Agents that do not go to the Hangout Room when idle. Diktator (coordinator) stays
+// seated at the executive desk in the Oval Office whether idle or working.
+const IDLE_OVERRIDES = {
+  coordinator: { x: 9, y: 10, room: 'Command Center' }
+};
 
 // ---------------------------------------------------------------------------
 // Validation + derived data
@@ -738,7 +743,14 @@ for (const t of IDLE_TARGETS) {
   if (idleKeys.has(k)) throw new Error(`duplicate idle target ${k}`);
   idleKeys.add(k);
 }
-const spawns = Object.fromEntries(AGENT_ORDER.map((id, i) => [id, { x: IDLE_TARGETS[i].x, y: IDLE_TARGETS[i].y }]));
+for (const [agent, t] of Object.entries(IDLE_OVERRIDES)) {
+  if (!seatOrFloor(t) || !inRoom(t, t.room)) throw new Error(`idle override for ${agent} is not a free tile in ${t.room}`);
+}
+// Idle position per agent: override if any, else the lounge seat matching its order.
+const spawns = Object.fromEntries(AGENT_ORDER.map((id, i) => {
+  const t = IDLE_OVERRIDES[id] || IDLE_TARGETS[i];
+  return [id, { x: t.x, y: t.y }];
+}));
 
 const root = path.join(__dirname, '..');
 const json = JSON.stringify({
@@ -747,7 +759,7 @@ const json = JSON.stringify({
   tile: TILE,
   collision,
   rooms,
-  targets: { work: WORK_TARGETS, idle: IDLE_TARGETS, idleRoom: 'Hangout Room', agentOrder: AGENT_ORDER },
+  targets: { work: WORK_TARGETS, idle: IDLE_TARGETS, idleRoom: 'Hangout Room', idleOverrides: IDLE_OVERRIDES, agentOrder: AGENT_ORDER },
   spawns
 }, null, 2)
   .replace(/\[\s+((?:\d+,\s*)*\d+)\s+\]/g, (m, inner) => `[${inner.replace(/\s+/g, '')}]`)

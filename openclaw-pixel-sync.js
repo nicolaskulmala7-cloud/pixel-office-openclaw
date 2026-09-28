@@ -29,7 +29,7 @@ const IDENTITY_PATH = path.join(STATE_DIR, 'device-identity.json');
 
 // OpenClaw agent -> Pixel Office agent. `slot` is the Pixel Office sprite/color index (0-3).
 const AGENT_MAP = [
-  { openclaw: 'coordinator', pixel: 'coordinator', slot: 0, name: 'Chief of Staff', room: 'Command Center' },
+  { openclaw: 'coordinator', pixel: 'coordinator', slot: 0, name: 'Diktator', room: 'Command Center' },
   { openclaw: 'researcher', pixel: 'researcher', slot: 1, name: 'Researcher', room: 'Research Lab' },
   { openclaw: 'writer', pixel: 'writer', slot: 2, name: 'Writer', room: 'Writing Studio' },
   { openclaw: 'reviewer', pixel: 'reviewer', slot: 3, name: 'Reviewer', room: 'Review Room' }
@@ -266,10 +266,17 @@ const refreshLayout = async () => {
     const explicit = targets.work && targets.work[m.openclaw];
     const tile = validTarget(explicit, room, collision) ? { x: explicit.x, y: explicit.y } : pickRoomTile(room, collision);
     if (!tile) log(`[pixel] WARNING no walkable tile found in room "${m.room}" for ${m.openclaw}`);
-    const idleTile = idleRoom ? idleFor(index) : null;
+    // Per-agent idle override (e.g. Diktator stays at the Oval Office desk), else a distinct lounge seat.
+    const override = targets.idleOverrides && targets.idleOverrides[m.openclaw];
+    const overrideRoom = override && roomList.find(r => r && r.name === override.room);
+    if (override && !validTarget(override, overrideRoom, collision)) {
+      log(`[pixel] WARNING idle override for ${m.openclaw} is not a free tile in "${override.room}"; using the idle room`);
+    }
+    const useOverride = override && validTarget(override, overrideRoom, collision);
+    const idleTile = useOverride ? { x: override.x, y: override.y } : (idleRoom ? idleFor(index) : null);
     layout.set(m.openclaw, {
       pixelId: agent.id, name: agent.name, slot: agent.color, room: m.room, tile,
-      idleRoom: idleTile ? idleRoomName : m.room, idleTile: idleTile || tile
+      idleRoom: useOverride ? override.room : (idleTile ? idleRoomName : m.room), idleTile: idleTile || tile
     });
   });
   const changed = JSON.stringify([...layout]) !== JSON.stringify([...pixel.layout]);
@@ -425,12 +432,15 @@ const pushAgent = async (id, { force = false } = {}) => {
   try {
     // Server-side target (every Pixel Office client walks there) + a one-shot command for an immediate move/bubble.
     await pixelPost(`/api/agent/${pid}/move`, { state: target.state, ...(tile ? tileCenterPx(tile) : {}) });
-    if (tile) {
+    const prev = applied.get(id);
+    const sameTile = prev && prev.tile && tile && prev.tile.x === tile.x && prev.tile.y === tile.y;
+    // Skip a redundant command when the agent stays on the same tile with nothing to say.
+    if (tile && !(sameTile && !target.label)) {
       await pixelPost(`/api/agent/${pid}/command`, {
         action: 'move', tileX: tile.x, tileY: tile.y, msg: target.label, source: 'openclaw-sync'
       });
     }
-    applied.set(id, { ...target });
+    applied.set(id, { ...target, tile });
     markPixelReachable(true);
     const where = target.state === 'working' ? layout.room : layout.idleRoom;
     log(`[sync] ${id} -> ${target.state}${target.label ? ` (${target.label})` : ''} @ ${where}${tile ? ` (${tile.x},${tile.y})` : ''}`);

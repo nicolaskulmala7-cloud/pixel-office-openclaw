@@ -127,7 +127,7 @@ const DEFAULT_ROOMS = Array.isArray(OFFICE_LAYOUT.rooms) && OFFICE_LAYOUT.rooms.
 ];
 
 const DEFAULT_AGENTS = [
-  { id: 'coordinator', name: 'Chief of Staff', role: 'Coordinator', color: 0, x: spawnX('coordinator', 3), y: spawnY('coordinator', 21), room: 'Command Center' },
+  { id: 'coordinator', name: 'Diktator', role: 'Coordinator', color: 0, x: spawnX('coordinator', 9), y: spawnY('coordinator', 10), room: 'Command Center' },
   { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, x: spawnX('researcher', 4), y: spawnY('researcher', 21), room: 'Research Lab' },
   { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, x: spawnX('writer', 13), y: spawnY('writer', 21), room: 'Writing Studio' },
   { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, x: spawnX('reviewer', 15), y: spawnY('reviewer', 21), room: 'Review Room' }

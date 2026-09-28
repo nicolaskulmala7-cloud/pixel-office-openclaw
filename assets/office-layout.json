@@ -361,6 +361,13 @@
       { "x": 11, "y": 23 }
     ],
     "idleRoom": "Hangout Room",
+    "idleOverrides": {
+      "coordinator": {
+        "x": 9,
+        "y": 10,
+        "room": "Command Center"
+      }
+    },
     "agentOrder": [
       "coordinator",
       "researcher",
@@ -369,7 +376,7 @@
     ]
   },
   "spawns": {
-    "coordinator": { "x": 3, "y": 21 },
+    "coordinator": { "x": 9, "y": 10 },
     "researcher": { "x": 4, "y": 21 },
     "writer": { "x": 13, "y": 21 },
     "reviewer": { "x": 15, "y": 21 }
