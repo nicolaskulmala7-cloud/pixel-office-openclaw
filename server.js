@@ -268,7 +268,7 @@ app.post('/api/auth/login', (req, res) => {
 
 // Posición y estado de los agentes los controla /api/agent/:id/move (live sync);
 // un guardado de configuración no los sobrescribe.
-const LIVE_FIELDS = ['x', 'y', 'state'];
+const LIVE_FIELDS = ['x', 'y', 'state', 'status', 'task', 'taskId', 'statusSince'];
 const roomsHaveTiles = (rooms) => Array.isArray(rooms) && rooms.some(r => r && Array.isArray(r.tiles) && r.tiles.length);
 
 app.post('/api/config', (req, res) => {
@@ -305,6 +305,97 @@ app.post('/api/agent/:id/move', (req, res) => {
   } else {
     res.status(404).json({ error: 'Agente no encontrado' });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Live status, task feed and health (written by the OpenClaw sync bridge)
+
+const AGENT_STATUSES = ['IDLE', 'WORKING', 'RESEARCHING', 'WRITING', 'REVIEWING', 'DELEGATING', 'WAITING APPROVAL', 'ERROR', 'OFFLINE'];
+const TASK_STATUSES = ['queued', 'running', 'waiting_approval', 'completed', 'failed', 'cancelled', 'timed_out', 'lost'];
+const TASKS_PATH = dataPath('tasks.json');
+const MAX_TASKS = 200;
+const clip = (v, n) => (typeof v === 'string' ? v.slice(0, n) : undefined);
+const num = (v) => (Number.isFinite(v) ? v : undefined);
+
+app.post('/api/agent/:id/status', (req, res) => {
+  const id = agentKey(req.params.id);
+  const agent = id && config.agents.find(a => String(a.id) === id);
+  if (!agent) return res.status(404).json({ error: 'Agente no encontrado' });
+  const { status, task, taskId } = req.body || {};
+  if (!AGENT_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  if (agent.status !== status) agent.statusSince = Date.now();
+  agent.status = status;
+  agent.task = clip(task, 160) || '';
+  agent.taskId = clip(taskId, 80) || '';
+  persistAgents(config.agents);
+  res.json({ success: true });
+});
+
+// Sanitised copy of the OpenClaw task ledger (titles, states, timestamps, short summaries)
+let taskFeed = readJSONFile(TASKS_PATH) || { updatedAt: 0, tasks: [] };
+const sanitizeTask = (t) => ({
+  id: clip(t.id, 80),
+  agentId: clip(t.agentId, 64),
+  title: clip(t.title, 200) || '',
+  status: TASK_STATUSES.includes(t.status) ? t.status : 'queued',
+  kind: clip(t.kind, 32),
+  runtime: clip(t.runtime, 32),
+  createdAt: num(t.createdAt),
+  startedAt: num(t.startedAt),
+  endedAt: num(t.endedAt),
+  summary: clip(t.summary, 600),
+  error: clip(t.error, 300),
+  toolUseCount: num(t.toolUseCount),
+  parentTaskId: clip(t.parentTaskId, 80)
+});
+app.post('/api/tasks/sync', (req, res) => {
+  const list = req.body && Array.isArray(req.body.tasks) ? req.body.tasks : null;
+  if (!list) return res.status(400).json({ error: 'tasks[] required' });
+  const tasks = list.filter(t => t && typeof t.id === 'string').slice(0, MAX_TASKS).map(sanitizeTask);
+  taskFeed = { updatedAt: Date.now(), tasks };
+  writeJSONFile(TASKS_PATH, taskFeed);
+  res.json({ success: true, count: tasks.length });
+});
+app.get('/api/tasks', (req, res) => {
+  let tasks = taskFeed.tasks;
+  if (req.query.agentId) tasks = tasks.filter(t => t.agentId === String(req.query.agentId));
+  if (req.query.status) tasks = tasks.filter(t => t.status === String(req.query.status));
+  res.json({ updatedAt: taskFeed.updatedAt, tasks });
+});
+
+// Health: Pixel Office itself, plus what the bridge last reported (no secrets)
+const startedAt = Date.now();
+let bridgeReport = null;
+const BRIDGE_STALE_MS = 45000;
+app.post('/api/sync/heartbeat', (req, res) => {
+  const b = req.body || {};
+  bridgeReport = {
+    receivedAt: Date.now(),
+    version: clip(b.version, 32),
+    gateway: {
+      connected: b.gateway && b.gateway.connected === true,
+      since: num(b.gateway && b.gateway.since),
+      serverVersion: clip(b.gateway && b.gateway.serverVersion, 32)
+    },
+    scheduler: b.scheduler && typeof b.scheduler === 'object' ? {
+      ok: b.scheduler.ok === true,
+      jobs: num(b.scheduler.jobs),
+      enabledJobs: num(b.scheduler.enabledJobs),
+      nextWakeAt: num(b.scheduler.nextWakeAt)
+    } : null
+  };
+  res.json({ success: true });
+});
+app.get('/api/health', (req, res) => {
+  const now = Date.now();
+  const bridgeOk = !!bridgeReport && now - bridgeReport.receivedAt < BRIDGE_STALE_MS;
+  res.json({
+    now,
+    pixelOffice: { ok: true, uptimeMs: now - startedAt },
+    bridge: { ok: bridgeOk, lastSeenAt: bridgeReport ? bridgeReport.receivedAt : null, version: bridgeReport ? bridgeReport.version : null },
+    gateway: { ok: bridgeOk && bridgeReport.gateway.connected, since: bridgeOk ? bridgeReport.gateway.since : null, version: bridgeOk ? bridgeReport.gateway.serverVersion : null },
+    scheduler: bridgeOk && bridgeReport.scheduler ? bridgeReport.scheduler : { ok: false, jobs: null }
+  });
 });
 
 // API para obtener log de acciones

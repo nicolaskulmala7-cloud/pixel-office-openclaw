@@ -365,6 +365,7 @@ const recompute = () => {
       pushAgent(id).catch(() => {});
     }
   }
+  pushAllStatuses();
 };
 
 // Apply one keyed row (from sessions.changed, session.message or sessions.list).
@@ -421,6 +422,113 @@ const applyActiveSnapshot = (list) => {
 };
 
 // ---------------------------------------------------------------------------
+// Live status + task ledger (structured OpenClaw data only; no model calls)
+
+const gw = { connected: false, since: 0, serverVersion: null };
+let configuredAgents = null; // Set of OpenClaw agent ids from agents.list (null = unknown yet)
+const tasks = new Map();     // taskId -> sanitised TaskSummary
+let scheduler = null;        // { ok, jobs, nextWakeAt } from cron.status
+const ERROR_WINDOW_MS = 10 * 60 * 1000;
+const WORK_VERB = { coordinator: 'WORKING', researcher: 'RESEARCHING', writer: 'WRITING', reviewer: 'REVIEWING' };
+const TASK_STATUS_MAP = { succeeded: 'completed', blocked: 'waiting_approval' };
+
+const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : undefined);
+const sanitizeTask = (t) => {
+  if (!t || typeof t.id !== 'string') return null;
+  const status = TASK_STATUS_MAP[t.status] || t.status;
+  return {
+    id: t.id, agentId: str(t.agentId, 64), title: str(t.title, 200) || '', status,
+    kind: str(t.kind, 32), runtime: str(t.runtime, 32),
+    createdAt: t.createdAt, startedAt: t.startedAt, endedAt: t.endedAt,
+    summary: str(t.terminalSummary, 600) || str(t.progressSummary, 600),
+    error: str(t.error, 300), toolUseCount: t.toolUseCount, parentTaskId: str(t.parentTaskId, 80)
+  };
+};
+const upsertTask = (raw) => {
+  const t = sanitizeTask(raw);
+  if (!t) return false;
+  const prev = tasks.get(t.id);
+  if (prev && JSON.stringify(prev) === JSON.stringify(t)) return false;
+  tasks.set(t.id, t);
+  return true;
+};
+const recentTasks = () => [...tasks.values()]
+  .sort((a, b) => (b.startedAt || b.createdAt || 0) - (a.startedAt || a.createdAt || 0))
+  .slice(0, 200);
+
+const computeStatus = (id) => {
+  if (!gw.connected) return { status: 'OFFLINE', task: 'OpenClaw Gateway not connected', taskId: '' };
+  if (configuredAgents && !configuredAgents.has(id)) return { status: 'OFFLINE', task: 'Not configured in OpenClaw', taskId: '' };
+  const mine = recentTasks().filter(t => t.agentId === id);
+  const waiting = mine.find(t => t.status === 'waiting_approval');
+  if (waiting) return { status: 'WAITING APPROVAL', task: waiting.title, taskId: waiting.id };
+  if (agentIsActive(id)) {
+    const running = mine.find(t => t.status === 'running') || mine.find(t => t.status === 'queued');
+    const workerActive = AGENT_MAP.some(m => m.openclaw !== COORDINATOR && agentIsActive(m.openclaw));
+    const status = id === COORDINATOR && workerActive ? 'DELEGATING' : (WORK_VERB[id] || 'WORKING');
+    // The ledger can close a task a moment before the session goes idle: keep showing it until then.
+    if (running) activeTask.set(id, { task: running.title, taskId: running.id });
+    const shown = running ? { task: running.title, taskId: running.id } : (activeTask.get(id) || { task: '', taskId: '' });
+    return { status, ...shown };
+  }
+  activeTask.delete(id);
+  const last = mine.find(t => ['completed', 'failed', 'timed_out', 'cancelled', 'lost'].includes(t.status));
+  // A scheduler run recorded as "failed" only because it was skipped (e.g. heartbeat with no route) is not an error.
+  const skipped = last && /\bskipped\b/i.test(last.error || '');
+  if (last && !skipped && (last.status === 'failed' || last.status === 'timed_out') && Date.now() - (last.endedAt || 0) < ERROR_WINDOW_MS) {
+    return { status: 'ERROR', task: last.error ? `${last.title} — ${last.error}` : last.title, taskId: last.id };
+  }
+  return { status: 'IDLE', task: '', taskId: '' };
+};
+
+const statusApplied = new Map(); // openclawId -> JSON of last pushed status
+const activeTask = new Map();    // openclawId -> task shown during the current active period
+const pushStatus = async (id, { force = false } = {}) => {
+  const layout = pixel.layout.get(id);
+  if (!layout) return;
+  const st = computeStatus(id);
+  const key = JSON.stringify(st);
+  if (!force && statusApplied.get(id) === key) return;
+  try {
+    await pixelPost(`/api/agent/${encodeURIComponent(layout.pixelId)}/status`, st);
+    statusApplied.set(id, key);
+    log(`[status] ${id} -> ${st.status}${st.taskId ? ` (task ${st.taskId.slice(0, 8)})` : ''}`);
+  } catch (e) {
+    markPixelReachable(false, e);
+  }
+};
+const pushAllStatuses = () => { for (const m of AGENT_MAP) pushStatus(m.openclaw).catch(() => {}); };
+
+let taskFeedTimer = null;
+let taskFeedDirty = true;
+const scheduleTaskFeed = () => {
+  taskFeedDirty = true;
+  if (taskFeedTimer) return;
+  taskFeedTimer = setTimeout(async () => {
+    taskFeedTimer = null;
+    if (!taskFeedDirty) return;
+    try {
+      await pixelPost('/api/tasks/sync', { tasks: recentTasks() });
+      taskFeedDirty = false;
+    } catch (e) {
+      markPixelReachable(false, e);
+    }
+  }, 1000);
+};
+
+const sendHeartbeat = async () => {
+  try {
+    await pixelPost('/api/sync/heartbeat', {
+      version: VERSION,
+      gateway: { connected: gw.connected, since: gw.since, serverVersion: gw.serverVersion },
+      scheduler
+    });
+  } catch (e) {
+    markPixelReachable(false, e);
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Push state into Pixel Office
 
 // Where an agent should be for a target state: work tile when working, its own lounge seat when idle.
@@ -439,10 +547,10 @@ const pushAgent = async (id, { force = false } = {}) => {
     await pixelPost(`/api/agent/${pid}/move`, { state: target.state, ...(tile ? tileCenterPx(tile) : {}) });
     const prev = applied.get(id);
     const sameTile = prev && prev.tile && tile && prev.tile.x === tile.x && prev.tile.y === tile.y;
-    // Skip a redundant command when the agent stays on the same tile with nothing to say.
-    if (tile && !(sameTile && !target.label)) {
+    // Status is shown persistently (see pushStatus); only send a move command when the tile changes.
+    if (tile && !sameTile) {
       await pixelPost(`/api/agent/${pid}/command`, {
-        action: 'move', tileX: tile.x, tileY: tile.y, msg: target.label, source: 'openclaw-sync'
+        action: 'move', tileX: tile.x, tileY: tile.y, source: 'openclaw-sync'
       });
     }
     applied.set(id, { ...target, tile });
@@ -486,7 +594,12 @@ const pixelReconcile = async () => {
       } else if (drifted) {
         await pixelPost(`/api/agent/${encodeURIComponent(layout.pixelId)}/move`, { state: target.state, ...(want || {}) });
       }
+      const st = computeStatus(id);
+      const statusDrift = agent && (agent.status !== st.status || (agent.task || '') !== st.task || (agent.taskId || '') !== st.taskId);
+      if (!wasReachable || statusDrift) await pushStatus(id, { force: true });
     }
+    if (!wasReachable) scheduleTaskFeed();
+    await sendHeartbeat();
   } catch (e) {
     markPixelReachable(false, e);
   }
@@ -530,10 +643,32 @@ const reconcileGateway = async () => {
   try {
     const list = await rpc('sessions.list', { activeOnly: true, limit: 200 });
     applyActiveSnapshot(list);
+    await refreshLedger();
     recompute();
   } catch (e) {
     log(`[gateway] reconcile failed: ${describeError(e)}`);
     if (e.code === 'TIMEOUT' && ws) ws.close(4000, 'reconcile timeout');
+  }
+};
+
+// Agents, task ledger and scheduler status: cheap read-only RPCs, no model calls.
+const refreshLedger = async () => {
+  const [agentsRes, tasksRes, cronRes] = await Promise.allSettled([
+    rpc('agents.list', {}), rpc('tasks.list', { limit: 200 }), rpc('cron.status', {})
+  ]);
+  if (agentsRes.status === 'fulfilled' && Array.isArray(agentsRes.value && agentsRes.value.agents)) {
+    configuredAgents = new Set(agentsRes.value.agents.map(a => a.id));
+  }
+  if (tasksRes.status === 'fulfilled' && Array.isArray(tasksRes.value && tasksRes.value.tasks)) {
+    const seen = new Set();
+    let changed = false;
+    for (const t of tasksRes.value.tasks) { seen.add(t.id); changed = upsertTask(t) || changed; }
+    for (const id of [...tasks.keys()]) if (!seen.has(id)) { tasks.delete(id); changed = true; }
+    if (changed) scheduleTaskFeed();
+  }
+  if (cronRes.status === 'fulfilled' && cronRes.value) {
+    const c = cronRes.value;
+    scheduler = { ok: c.enabled === true, jobs: c.jobs, nextWakeAt: c.nextWakeAtMs };
   }
 };
 
@@ -542,12 +677,17 @@ const onHello = async (hello, ident) => {
   if (auth.deviceToken) persistDeviceToken(ident, auth.deviceToken);
   useSharedToken = false;
   connectedAt = Date.now();
+  gw.connected = true;
+  gw.since = connectedAt;
+  gw.serverVersion = (hello.server && hello.server.version) || null;
   log(`[gateway] connected (server ${hello.server && hello.server.version}, scopes ${JSON.stringify(auth.scopes || [])})`);
   try {
     // Install listener first (done in onmessage); then subscribe with an activeOnly snapshot.
     const res = await rpc('sessions.subscribe', { activeOnly: true, limit: 200 });
     applyActiveSnapshot(res && res.list);
+    await refreshLedger().catch(() => {});
     recompute();
+    sendHeartbeat();
     // Trailing refresh in case events raced the snapshot.
     setTimeout(() => reconcileGateway(), 1000);
   } catch (e) {
@@ -665,6 +805,13 @@ const connect = () => {
         lastInvalidation = Date.now();
         setTimeout(reconcileGateway, 250); // broad invalidation -> authoritative refresh
       }
+    } else if (frame.event === 'task' && payload && payload.task) {
+      if (payload.action === 'deleted' || payload.action === 'removed') {
+        if (tasks.delete(payload.task.id)) scheduleTaskFeed();
+      } else if (upsertTask(payload.task)) {
+        scheduleTaskFeed();
+      }
+      pushAllStatuses();
     } else if (frame.event === 'agent' && payload && payload.stream === 'lifecycle') {
       const phase = payload.data && payload.data.phase;
       if (phase === 'end' || phase === 'error' || phase === 'aborted') setTimeout(reconcileGateway, 1500);
@@ -685,8 +832,11 @@ const connect = () => {
     connectedAt = 0;
     log(`[gateway] disconnected (code ${ev.code}${ev.reason ? `, ${scrub(ev.reason)}` : ''})`);
     // Unknown activity while disconnected: mark everyone idle rather than show stale work.
+    gw.connected = false;
+    gw.since = Date.now();
     sessions.clear();
     recompute();
+    sendHeartbeat();
     if (uptime > 60000) backoffMs = BACKOFF_MIN_MS;
     scheduleReconnect(retryOverride);
   };

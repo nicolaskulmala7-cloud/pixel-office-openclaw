@@ -191,6 +191,8 @@
         const MAX_IDLE_FRAMES = 60 * 5; // ~5 segundos a 60fps
         // El live sync (servidor) decide dónde está cada agente: sin paseos aleatorios en reposo
         const IDLE_WANDER = false;
+        // Sin burbujas aleatorias: el estado real se muestra de forma persistente (drawAgentLabel)
+        const RANDOM_CHATTER = false;
 
         // Equipo OpenClaw por defecto (se usa si el servidor no responde; el servidor es la fuente real)
         const rectTiles = (x1, y1, x2, y2) => {
@@ -645,7 +647,7 @@
                         this.isTalking = false;
                         this.bubbleText = "";
                     }
-                } else if (Math.random() < 0.005 && !this.isTalking) {
+                } else if (RANDOM_CHATTER && Math.random() < 0.005 && !this.isTalking) {
                     this.isTalking = true;
                     this.bubbleTimer = 200 + Math.random() * 100;
                     
@@ -1148,18 +1150,7 @@
                 if (typeof characters !== 'undefined') {
                     characters.sort((a, b) => a.y - b.y);
                     for (let char of characters) char.draw(spriteManager);
-                    // Nombres
-                    ctx.font = '10px "Courier New", monospace';
-                    ctx.textAlign = 'center';
-                    for (let char of characters) {
-                        const text = char.name;
-                        const nameWidth = ctx.measureText(text).width;
-                        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                        const textY = char.y - 45;
-                        ctx.fillRect(char.x - nameWidth/2 - 4, textY - 10, nameWidth + 8, 14);
-                        ctx.fillStyle = 'white';
-                        ctx.fillText(text, char.x, textY);
-                    }
+                    drawAgentLabels(characters);
                 }
                 requestAnimationFrame(gameLoop);
                 return;
@@ -1187,18 +1178,84 @@
 
             
             // Dibujar nombres de los personajes
-            ctx.font = '10px "Courier New", monospace';
-            ctx.textAlign = 'center';
-            for (let char of characters) {
-                const text = char.name;
-                const nameWidth = ctx.measureText(text).width;
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                const textY = char.y - 45;
-                ctx.fillRect(char.x - nameWidth/2 - 4, textY - 10, nameWidth + 8, 14);
-                ctx.fillStyle = 'white';
-                ctx.fillText(text, char.x, textY);
-            }
+            drawAgentLabels(characters);
             requestAnimationFrame(gameLoop);
+        }
+
+        // --- Estado persistente de cada agente (nombre, estado, tarea actual) ---
+        const STATUS_COLORS = {
+            'IDLE': '#94a3b8', 'WORKING': '#3b82f6', 'RESEARCHING': '#ec4899', 'WRITING': '#10b981',
+            'REVIEWING': '#f59e0b', 'DELEGATING': '#c9a227', 'WAITING APPROVAL': '#a855f7',
+            'ERROR': '#ef4444', 'OFFLINE': '#475569'
+        };
+        let systemHealth = null;
+        async function pollHealth() {
+            try { systemHealth = await (await fetch('/api/health')).json(); } catch (e) { systemHealth = null; }
+        }
+        setInterval(pollHealth, 10000);
+        pollHealth();
+        function effectiveStatus(char) {
+            // Si el bridge no informa, no se puede afirmar ningún estado: OFFLINE
+            if (systemHealth && systemHealth.bridge && !systemHealth.bridge.ok) return 'OFFLINE';
+            return char.status || 'IDLE';
+        }
+        function truncateText(text, maxWidth) {
+            if (ctx.measureText(text).width <= maxWidth) return text;
+            let t = text;
+            while (t.length > 1 && ctx.measureText(t + '…').width > maxWidth) t = t.slice(0, -1);
+            return t + '…';
+        }
+        function drawAgentLabels(list) {
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            for (const char of list) {
+                const status = effectiveStatus(char);
+                const color = STATUS_COLORS[status] || STATUS_COLORS.IDLE;
+                const compact = status === 'IDLE';
+                // Vecinos en el Hangout (1 tile de distancia): alternar altura para no solaparse
+                const stagger = compact && (Math.floor(char.x / GRID_SIZE) % 2) ? -12 : 0;
+                let y = char.y - 70 + stagger;
+                ctx.font = 'bold 10px "Courier New", monospace';
+                const name = char.name;
+                if (compact) {
+                    const w = ctx.measureText(name).width + 16;
+                    ctx.fillStyle = 'rgba(15, 18, 26, 0.72)';
+                    ctx.fillRect(char.x - w / 2, y - 7, w, 14);
+                    ctx.fillStyle = color;
+                    ctx.beginPath(); ctx.arc(char.x - w / 2 + 6, y, 3, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#e5e7eb';
+                    ctx.fillText(name, char.x + 4, y);
+                    continue;
+                }
+                ctx.font = 'bold 9px "Courier New", monospace';
+                const badge = status;
+                const nameW = ctx.measureText(name).width;
+                const badgeW = ctx.measureText(badge).width + 8;
+                const w = nameW + badgeW + 14;
+                ctx.fillStyle = 'rgba(15, 18, 26, 0.85)';
+                ctx.fillRect(char.x - w / 2, y - 8, w, 16);
+                ctx.fillStyle = color;
+                ctx.fillRect(char.x - w / 2, y + 7, w, 1);
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'left';
+                ctx.fillText(name, char.x - w / 2 + 4, y);
+                ctx.fillStyle = color;
+                ctx.fillRect(char.x - w / 2 + nameW + 9, y - 6, badgeW, 12);
+                ctx.fillStyle = status === 'DELEGATING' || status === 'REVIEWING' ? '#1b1f29' : '#ffffff';
+                ctx.fillText(badge, char.x - w / 2 + nameW + 13, y + 0.5);
+                ctx.textAlign = 'center';
+                if (char.task) {
+                    ctx.font = '9px "Courier New", monospace';
+                    const task = truncateText('“' + char.task + '”', 200);
+                    const tw = ctx.measureText(task).width + 8;
+                    ctx.fillStyle = 'rgba(15, 18, 26, 0.78)';
+                    ctx.fillRect(char.x - tw / 2, y - 23, tw, 13);
+                    ctx.fillStyle = '#d1d5db';
+                    ctx.fillText(task, char.x, y - 16);
+                }
+            }
+            ctx.restore();
         }
 
         // --- Funciones para el Chat AI ---
@@ -1562,7 +1619,11 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
                 const config = await response.json();
                 characters.forEach(char => {
                     const agent = (config.agents || []).find(a => a.id === char.id);
-                    if (!agent || agent.x === undefined || agent.y === undefined) return;
+                    if (!agent) return;
+                    char.status = agent.status || 'IDLE';
+                    char.task = agent.task || '';
+                    char.statusSince = agent.statusSince || null;
+                    if (agent.x === undefined || agent.y === undefined) return;
                     const key = `${agent.x},${agent.y}`;
                     if (key === char.serverTarget) return;
                     char.serverTarget = key;
