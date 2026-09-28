@@ -1,0 +1,82 @@
+{
+  "schema_version": 2,
+  "note": "Data-driven compact office (Fallout-Shelter-style stacked floors; original art only). Floors are bands of compact rooms around a central lift shaft. Everything (art, collision, rooms, doors, targets, idle seats, lever, plaques) is generated from this file.",
+  "room_height": 4,
+  "shaft_width": 2,
+  "legend_note": "Row 0 of a template is against the top wall; the last row is the walkway where doors are placed.",
+  "floors": [
+    { "left": ["achievement_hall"], "right": ["oval_office"] },
+    { "left": ["research_lab", "writing_studio"], "right": ["review_room", "operations_room"] },
+    { "left": ["trading_floor", "crypto_lab"], "right": ["memecoin_war_room", "sports_analytics_room"] },
+    { "left": ["hangout_room"], "right": [] }
+  ],
+  "rooms": {
+    "oval_office": {
+      "name": "Command Center", "label": "OVAL OFFICE", "color": "#c9a227", "floor": "exec", "oval": true,
+      "template": ["f.B.E...B.f", "l...XX....l", ".q.rrrrr.p.", "..........."]
+    },
+    "achievement_hall": {
+      "name": "Achievement Hall", "label": "ACHIEVEMENT HALL", "color": "#e0b83a", "floor": "marble",
+      "template": ["UUUUUUUUUUUUU", ".I.........I.", ".....GG......", "............."]
+    },
+    "research_lab": {
+      "name": "Research Lab", "color": "#ec4899", "floor": "lab",
+      "template": ["BB.W.BB", ".k.L.k.", ".c...c.", "......."]
+    },
+    "writing_studio": {
+      "name": "Writing Studio", "color": "#10b981", "floor": "wood",
+      "template": ["BB.P.BB", ".w...w.", ".c...c.", "......."]
+    },
+    "review_room": {
+      "name": "Review Room", "color": "#f59e0b", "floor": "checker",
+      "template": ["FFW.WFF", ".TT.TT.", ".c...c.", "......."]
+    },
+    "operations_room": {
+      "name": "Operations Room", "label": "OPERATIONS", "color": "#14b8a6", "floor": "noc",
+      "template": ["RVVVVVR", ".N.N.N.", ".c.c.c.", "......."]
+    },
+    "trading_floor": {
+      "name": "Trading Floor", "color": "#22c55e", "floor": "trading",
+      "template": ["YYYYYYY", ".Z.Z.Z.", ".c.c.c.", "......."]
+    },
+    "crypto_lab": {
+      "name": "Crypto Lab", "color": "#f7931a", "floor": "crypto",
+      "template": ["QQ.W.QQ", ".k.k.k.", ".c.c.c.", "......."]
+    },
+    "memecoin_war_room": {
+      "name": "Memecoin War Room", "label": "MEMECOIN WAR RM", "color": "#ef4444", "floor": "meme",
+      "template": ["YYYYYYY", ".HHHHH.", ".c.c.c.", "......."]
+    },
+    "sports_analytics_room": {
+      "name": "Sports Analytics Room", "label": "SPORTS ANALYTICS", "color": "#06b6d4", "floor": "sports",
+      "template": ["JJJJJJJ", ".k.k.k.", ".c.c.c.", "......."]
+    },
+    "hangout_room": {
+      "name": "Hangout Room", "color": "#8b5cf6", "floor": "lounge",
+      "template": ["MM...AA...CC..P", ".t.t.t.t.t.t.t.", ".u.K.u.K.u.K.u.", "..............."]
+    }
+  },
+  "idle_room": "hangout_room",
+  "agents": [
+    { "id": "coordinator", "name": "Diktator", "role": "Coordinator", "slot": 0, "room": "oval_office", "seat": [4, 0], "idle": "work", "enabled": true },
+    { "id": "researcher", "name": "Researcher", "role": "Research Analyst", "slot": 1, "room": "research_lab", "seat": [1, 2], "enabled": true },
+    { "id": "writer", "name": "Writer", "role": "Content Writer", "slot": 2, "room": "writing_studio", "seat": [1, 2], "enabled": true },
+    { "id": "reviewer", "name": "Reviewer", "role": "Quality Reviewer", "slot": 3, "room": "review_room", "seat": [1, 2], "enabled": true },
+    { "id": "market_trader", "name": "Trader", "role": "Market Trader (paper)", "slot": 4, "room": "trading_floor", "seat": [3, 2], "enabled": true },
+    { "id": "crypto_analyst", "name": "Crypto", "role": "Crypto Analyst (paper)", "slot": 5, "room": "crypto_lab", "seat": [3, 2], "enabled": true },
+    { "id": "memecoin_scout", "name": "Memecoin Scout", "role": "Memecoin Scout (research only)", "slot": 6, "room": "memecoin_war_room", "seat": [3, 2], "enabled": true },
+    { "id": "sports_analyst", "name": "Sports Analyst", "role": "Sports Analyst (paper)", "slot": 7, "room": "sports_analytics_room", "seat": [3, 2], "enabled": true },
+    { "id": "operations", "name": "Operator", "role": "Operations (runtime visibility, read-only)", "slot": 8, "room": "operations_room", "seat": [3, 2], "enabled": true },
+    { "id": "equities_scout", "name": "Equities Scout", "role": "Equities Scout (planned, paper)", "slot": 9, "room": "trading_floor", "seat": [1, 2], "parent": "market_trader", "enabled": false },
+    { "id": "macro_scout", "name": "Macro Scout", "role": "Macro Scout (planned, research)", "slot": 10, "room": "trading_floor", "seat": [5, 2], "parent": "market_trader", "enabled": false },
+    { "id": "crypto_trader", "name": "Crypto Trader", "role": "Crypto Trader (planned, paper)", "slot": 11, "room": "crypto_lab", "seat": [1, 2], "parent": "crypto_analyst", "enabled": false },
+    { "id": "onchain_scout", "name": "On-chain Scout", "role": "On-chain Scout (planned, research)", "slot": 12, "room": "crypto_lab", "seat": [5, 2], "parent": "crypto_analyst", "enabled": false },
+    { "id": "sentiment_scout", "name": "Sentiment Scout", "role": "Sentiment Scout (planned, research)", "slot": 13, "room": "memecoin_war_room", "seat": [1, 2], "parent": "memecoin_scout", "enabled": false },
+    { "id": "sports_bettor", "name": "Sports Bettor", "role": "Sports Bettor (planned, paper)", "slot": 14, "room": "sports_analytics_room", "seat": [1, 2], "parent": "sports_analyst", "enabled": false },
+    { "id": "odds_scout", "name": "Odds Scout", "role": "Odds Scout (planned, research)", "slot": 15, "room": "sports_analytics_room", "seat": [5, 2], "parent": "sports_analyst", "enabled": false }
+  ],
+  "ui": {
+    "lever": { "room": "oval_office", "at": [8, 1] },
+    "plaques": { "room": "achievement_hall", "char": "U" }
+  }
+}

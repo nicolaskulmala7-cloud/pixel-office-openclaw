@@ -95,6 +95,10 @@ const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 19000;
 
 app.use(express.json());
+
+// Runtime activity feed (bounded, not durable) and read-only Business OS status.
+const activity = require('./activity').createActivity({ file: path.join(DATA_DIR, 'activity.json') });
+const businessBridge = require('./business-bridge').createBusinessBridge();
 // Static files: explicit allowlist only. The repository directory itself is never
 // served, so backups (*.bak*), .env, data/, test/, server-side modules and runtime
 // state cannot be fetched. Asset names are restricted to [A-Za-z0-9_-] and the final
@@ -103,7 +107,8 @@ const PUBLIC_ROOT_FILES = new Map([
   ['/', 'index.html'],
   ['/index.html', 'index.html'],
   ['/dashboard.html', 'dashboard.html'],
-  ['/nuclear-option.js', 'nuclear-option.js']
+  ['/nuclear-option.js', 'nuclear-option.js'],
+  ['/command-center.js', 'command-center.js']
 ]);
 const PUBLIC_ASSET = /^\/assets\/(?:characters\/)?[A-Za-z0-9_-]+\.(?:png|json)$/;
 app.use((req, res, next) => {
@@ -145,30 +150,14 @@ const SPAWNS = OFFICE_LAYOUT.spawns || {};
 const spawnX = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].x : fallback);
 const spawnY = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].y : fallback);
 
-const DEFAULT_ROOMS = Array.isArray(OFFICE_LAYOUT.rooms) && OFFICE_LAYOUT.rooms.length ? OFFICE_LAYOUT.rooms : [
-  { id: 1, name: 'Command Center', color: '#c9a227', tiles: rectTiles(15, 11, 20, 13) },
-  { id: 2, name: 'Research Lab', color: '#ec4899', tiles: rectTiles(1, 2, 10, 8) },
-  { id: 3, name: 'Writing Studio', color: '#10b981', tiles: rectTiles(1, 10, 10, 15) },
-  { id: 4, name: 'Review Room', color: '#f59e0b', tiles: rectTiles(1, 17, 10, 23) },
-  { id: 5, name: 'Hangout Room', color: '#8b5cf6', tiles: rectTiles(14, 19, 21, 23) },
-  { id: 6, name: 'Trading Floor', color: '#22c55e', tiles: rectTiles(25, 2, 34, 6) },
-  { id: 7, name: 'Crypto Lab', color: '#f7931a', tiles: rectTiles(25, 8, 34, 12) },
-  { id: 8, name: 'Memecoin War Room', color: '#ef4444', tiles: rectTiles(25, 14, 34, 18) },
-  { id: 9, name: 'Sports Analytics Room', color: '#06b6d4', tiles: rectTiles(25, 20, 34, 23) },
-  { id: 10, name: 'Operations Room', color: '#14b8a6', tiles: rectTiles(1, 25, 34, 29) }
-];
-
-const DEFAULT_AGENTS = [
-  { id: 'coordinator', name: 'Diktator', role: 'Coordinator', color: 0, x: spawnX('coordinator', 17), y: spawnY('coordinator', 10), room: 'Command Center' },
-  { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, x: spawnX('researcher', 16), y: spawnY('researcher', 20), room: 'Research Lab' },
-  { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, x: spawnX('writer', 15), y: spawnY('writer', 22), room: 'Writing Studio' },
-  { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, x: spawnX('reviewer', 16), y: spawnY('reviewer', 22), room: 'Review Room' },
-  { id: 'market_trader', name: 'Trader', role: 'Market Trader (paper)', color: 4, x: spawnX('market_trader', 20), y: spawnY('market_trader', 20), room: 'Trading Floor' },
-  { id: 'crypto_analyst', name: 'Crypto', role: 'Crypto Analyst (paper)', color: 5, x: spawnX('crypto_analyst', 19), y: spawnY('crypto_analyst', 21), room: 'Crypto Lab' },
-  { id: 'memecoin_scout', name: 'Memecoin Scout', role: 'Memecoin Scout (research only)', color: 6, x: spawnX('memecoin_scout', 21), y: spawnY('memecoin_scout', 21), room: 'Memecoin War Room' },
-  { id: 'sports_analyst', name: 'Sports Analyst', role: 'Sports Analyst (paper)', color: 7, x: spawnX('sports_analyst', 20), y: spawnY('sports_analyst', 22), room: 'Sports Analytics Room' },
-  { id: 'operations', name: 'Operator', role: 'Operations (runtime visibility, read-only)', color: 8, x: spawnX('operations', 18), y: spawnY('operations', 22), room: 'Operations Room' }
-].map(a => ({ ...a, personality: 'Trabajador', state: 'idle', active: true }));
+// Rooms and agents come ONLY from the generated layout (tools/office-spec.json ->
+// assets/office-layout.json). No hard-coded room coordinates or agent count here.
+const DEFAULT_ROOMS = Array.isArray(OFFICE_LAYOUT.rooms) ? OFFICE_LAYOUT.rooms : [];
+const DEFAULT_AGENTS = (Array.isArray(OFFICE_LAYOUT.agents) ? OFFICE_LAYOUT.agents : [])
+  .filter(a => a && a.enabled)
+  .map(a => ({ id: a.id, name: a.name, role: a.role, color: a.color, x: spawnX(a.id, 1), y: spawnY(a.id, 1), room: a.room }))
+  .map(a => ({ ...a, personality: 'Trabajador', state: 'idle', active: true }));
+if (!DEFAULT_AGENTS.length) console.error('office-layout.json has no enabled agents: run node tools/build-office-map.js');
 
 // Salas del demo original (sin tiles); si el mapa guardado solo contiene estas, se reemplaza
 const LEGACY_DEMO_ROOM_NAMES = ['Recepción', 'Sala Principal', 'Sala Reuniones', 'Despacho', 'Cafetería'];
@@ -376,7 +365,10 @@ app.post('/api/agent/:id/status', (req, res) => {
   if (!agent) return res.status(404).json({ error: 'Agente no encontrado' });
   const { status, task, taskId } = req.body || {};
   if (!AGENT_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' });
-  if (agent.status !== status) agent.statusSince = Date.now();
+  if (agent.status !== status) {
+    agent.statusSince = Date.now();
+    activity.add('agent', `${agent.name}: ${agent.status || 'IDLE'} -> ${status}${clip(task, 80) ? ` (${clip(task, 80)})` : ''}`, { ref: agent.id });
+  }
   agent.status = status;
   agent.task = clip(task, 160) || '';
   agent.taskId = clip(taskId, 80) || '';
@@ -457,6 +449,24 @@ const boundedInt = (v, min, max) => {
   return Math.max(min, Math.min(max, Math.trunc(v)));
 };
 
+// Structured worker details (all optional). Never credentials: only states, counts, times.
+const CODEX_STATES = ['AVAILABLE', 'RUNNING', 'WAITING_LIMIT', 'UNKNOWN'];
+const PROOFREADER_STATES = ['IDLE', 'PROOFREADING', 'PROMPT_READY', 'WAITING_HUMAN', 'UNKNOWN'];
+const sanitiseWorkerDetails = (d) => {
+  if (!d || typeof d !== 'object') return null;
+  const out = {};
+  if (d.codex && typeof d.codex === 'object') out.codex = { state: CODEX_STATES.includes(d.codex.state) ? d.codex.state : 'UNKNOWN', lastAttemptAt: num(d.codex.lastAttemptAt), nextRetryAt: num(d.codex.nextRetryAt) };
+  if (d.proofreader && typeof d.proofreader === 'object') out.proofreader = { state: PROOFREADER_STATES.includes(d.proofreader.state) ? d.proofreader.state : 'UNKNOWN' };
+  if (d.checkpoint && typeof d.checkpoint === 'object') out.checkpoint = { id: clip(d.checkpoint.id, 60), at: num(d.checkpoint.at) };
+  if (d.lastBatch && typeof d.lastBatch === 'object') out.lastBatch = { id: clip(d.lastBatch.id, 60), at: num(d.lastBatch.at), count: boundedInt(d.lastBatch.count, 0, 1000000) };
+  if (d.errorSummary) out.errorSummary = clip(d.errorSummary, 200);
+  if (Number.isFinite(d.courses)) out.courses = boundedInt(d.courses, 0, 100);
+  if (Number.isFinite(d.lastPollAt)) out.lastPollAt = num(d.lastPollAt);
+  return Object.keys(out).length ? out : null;
+};
+const sanitiseGlobalStop = (g) => (g && typeof g === 'object' && Number.isInteger(g.epoch) && g.epoch >= 0 && g.state === 'STOPPED'
+  ? { epoch: g.epoch, state: 'STOPPED', at: num(g.at) } : null);
+
 const sanitiseWorkerPayload = (id, body, previous = {}) => {
   const now = Date.now();
   const status = WORKER_STATUSES.includes(body.status) ? body.status : (previous.status || 'IDLE');
@@ -478,6 +488,8 @@ const sanitiseWorkerPayload = (id, body, previous = {}) => {
     nextCheckAt: num(body.nextCheckAt),
     qa: clip(body.qa, 80),
     source: clip(body.source, 40) || previous.source || '',
+    details: sanitiseWorkerDetails(body.details) || previous.details || null,
+    globalStop: sanitiseGlobalStop(body.globalStop) || previous.globalStop || null,
     lastSeenAt: now,
     updatedAt: now
   };
@@ -507,6 +519,11 @@ app.post('/api/workers/:id/status', (req, res) => {
   // Status heartbeats must never erase Pixel Office control state.
   if (previous.control && typeof previous.control === 'object') {
     worker.control = previous.control;
+  }
+  // Activity: state transitions only (never every heartbeat).
+  if (previous.status !== worker.status) activity.add('worker', `${worker.name}: ${previous.status || 'NEW'} -> ${worker.status}`, { ref: id });
+  if (worker.globalStop && (!previous.globalStop || previous.globalStop.epoch !== worker.globalStop.epoch)) {
+    activity.add('worker', `${worker.name} acknowledged global stop (epoch ${worker.globalStop.epoch})`, { ref: id });
   }
 
   workerFeed.workers[id] = worker;
@@ -603,6 +620,8 @@ app.post('/api/workers/:id/control', (req, res) => {
     }
   }
 
+  if (enabled !== (previous.enabled !== false)) activity.add('worker', `${worker.name || id}: ${enabled ? 'TURN ON' : 'TURN OFF'} requested`, { ref: id });
+  if (pendingAction && pendingAction !== previous.pendingAction) activity.add('worker', `${worker.name || id}: ${pendingAction.action} queued`, { ref: id });
   worker.control = {
     enabled,
     pendingAction,
@@ -644,6 +663,68 @@ app.post('/api/workers/:id/control/ack', (req, res) => {
 // Pixel Office only invokes the existing Business OS CLI with fixed arguments;
 // see killswitch-bridge.js. Registered before the index.html catch-all.
 require('./killswitch-bridge').createKillSwitchBridge().register(app);
+
+// ---------------------------------------------------------------------------
+// Command-center overview: ONE aggregated, cached, read-only response for the UI.
+// Business OS state (global gate, mode, ledger level, achievements, models, usage) comes
+// from business-bridge.js; external workers are observed only (never controlled here).
+const UNKNOWN_USAGE = (reason, extra = {}) => ({ status: 'UNKNOWN', percent_used: null, reset_at: null, reason, ...extra });
+const codexUsage = (w) => {
+  if (!w || !w.details || !w.details.codex) return UNKNOWN_USAGE('STARTAG has not reported a structured Codex state');
+  const c = w.details.codex;
+  if (w.stale) return UNKNOWN_USAGE('STARTAG heartbeat stale', { last_known: c.state, detected_at: w.lastSeenAt || null });
+  const status = c.state === 'WAITING_LIMIT' ? 'WAITING_LIMIT' : (c.state === 'AVAILABLE' || c.state === 'RUNNING') ? 'AVAILABLE' : 'UNKNOWN';
+  return { status, percent_used: null, reset_at: null, next_retry_at: c.nextRetryAt || null, detected_at: w.lastSeenAt || null, reason: 'reported by the STARTAG worker (Codex exposes no percentage)' };
+};
+let overviewBaseline = null;
+const noteOverviewChanges = (bos) => {
+  if (!bos || !bos.available) return;
+  const digest = { system: bos.global.system, level: bos.level.level, unlocked: bos.achievements.filter(a => a.unlocked).map(a => a.id) };
+  if (overviewBaseline) {
+    if (digest.system !== overviewBaseline.system) activity.add('system', `Global state ${overviewBaseline.system} -> ${digest.system}`);
+    if (digest.level !== overviewBaseline.level && Number.isFinite(digest.level)) activity.add('level', `Level up: LVL ${overviewBaseline.level} -> LVL ${digest.level}`);
+    for (const id of digest.unlocked) if (!overviewBaseline.unlocked.includes(id)) {
+      const a = bos.achievements.find(x => x.id === id);
+      activity.add('achievement', `Achievement unlocked: ${a ? a.title : id}`);
+    }
+  }
+  overviewBaseline = digest;
+};
+app.get('/api/overview', async (req, res) => {
+  try {
+    const now = Date.now();
+    const bos = await businessBridge.status();
+    noteOverviewChanges(bos);
+    const system = bos.available ? bos.global.system : 'UNKNOWN';
+    const epoch = bos.available ? bos.global.epoch : null;
+    const workers = Object.values(workerFeed.workers).map(w => effectiveWorker(w, now)).map(w => ({
+      id: w.id, name: w.name, status: w.status, enabled: w.enabled, stale: w.stale, lastSeenAt: w.lastSeenAt || null,
+      phase: clip(w.phase, 100), message: clip(w.message, 160), progress: w.progress || null, details: w.details || null,
+      controlledFromVps: false,
+      propagation: system === 'RUNNING' ? 'NOT_APPLICABLE'
+        : (w.globalStop && epoch !== null && w.globalStop.epoch === epoch ? 'ACKED' : 'EXTERNAL_PROPAGATION_PENDING')
+    }));
+    const startag = workers.find(w => w.id === 'startag_50k');
+    const proofreader = startag && !startag.stale && startag.details && startag.details.proofreader ? startag.details.proofreader.state : null;
+    res.json({
+      generatedAt: now,
+      bos,
+      workers,
+      usage: {
+        claude: bos.available ? bos.usage.claude : UNKNOWN_USAGE('Business OS status unavailable'),
+        codex: codexUsage(startag),
+        chatgpt: UNKNOWN_USAGE('interactive ChatGPT Chat exposes no usage to the VPS', { proofreader })
+      },
+      activity: activity.list(30)
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'overview unavailable' });
+  }
+});
+app.get('/api/activity', (req, res) => {
+  const n = Math.max(1, Math.min(200, parseInt(req.query.n, 10) || 50));
+  res.json({ items: activity.list(n) });
+});
 
 // Health: Pixel Office itself, plus what the bridge last reported (no secrets)
 const startedAt = Date.now();

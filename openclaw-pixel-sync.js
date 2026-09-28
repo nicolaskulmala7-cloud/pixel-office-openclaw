@@ -29,17 +29,9 @@ const IDENTITY_PATH = path.join(STATE_DIR, 'device-identity.json');
 
 // OpenClaw agent -> Pixel Office agent. `slot` is the Pixel Office sprite/color index (0-7).
 // Order matters: it matches targets.agentOrder in assets/office-layout.json (lounge seat i).
-const AGENT_MAP = [
-  { openclaw: 'coordinator', pixel: 'coordinator', slot: 0, name: 'Diktator', room: 'Command Center' },
-  { openclaw: 'researcher', pixel: 'researcher', slot: 1, name: 'Researcher', room: 'Research Lab' },
-  { openclaw: 'writer', pixel: 'writer', slot: 2, name: 'Writer', room: 'Writing Studio' },
-  { openclaw: 'reviewer', pixel: 'reviewer', slot: 3, name: 'Reviewer', room: 'Review Room' },
-  { openclaw: 'market_trader', pixel: 'market_trader', slot: 4, name: 'Trader', room: 'Trading Floor' },
-  { openclaw: 'crypto_analyst', pixel: 'crypto_analyst', slot: 5, name: 'Crypto', room: 'Crypto Lab' },
-  { openclaw: 'memecoin_scout', pixel: 'memecoin_scout', slot: 6, name: 'Memecoin Scout', room: 'Memecoin War Room' },
-  { openclaw: 'sports_analyst', pixel: 'sports_analyst', slot: 7, name: 'Sports Analyst', room: 'Sports Analytics Room' },
-  { openclaw: 'operations', pixel: 'operations', slot: 8, name: 'Operator', room: 'Operations Room' }
-];
+// Derived from Pixel Office /api/config on every layout refresh (ids are the OpenClaw
+// agent ids; slot = sprite slot). No hard-coded agent list or count here.
+let AGENT_MAP = [];
 const COORDINATOR = 'coordinator';
 const HANGOUT_ROOM = 'Hangout Room'; // idle agents rest here
 
@@ -258,6 +250,9 @@ const refreshLayout = async () => {
     return t ? { x: t.x, y: t.y } : null;
   };
 
+  AGENT_MAP = agents
+    .filter(a => a && typeof a.id === 'string' && a.active !== false)
+    .map(a => ({ openclaw: a.id, pixel: a.id, slot: a.color, name: a.name, room: a.room }));
   const layout = new Map();
   AGENT_MAP.forEach((m, index) => {
     const agent = agents.find(a => a.id === m.pixel) || agents.find(a => a.color === m.slot);

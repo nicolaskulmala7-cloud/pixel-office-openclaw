@@ -44,11 +44,29 @@
         
         /* Command Center HUD (over the top wall row of the map) */
         #hud {
-            position: absolute; top: 0; left: 0; right: 0; height: 30px;
-            display: flex; align-items: center; gap: 14px; padding: 0 12px;
-            background: rgba(10, 12, 18, 0.88); border-bottom: 1px solid #c9a227;
+            position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 6px 10px;
+            background: rgba(10, 12, 18, 0.95); border-bottom: 1px solid #c9a227;
             color: #e5e7eb; font-size: 11px; letter-spacing: 0.04em; z-index: 5;
         }
+        #hud .hud-group { display: flex; align-items: center; gap: 10px; padding-right: 12px; border-right: 1px solid #2d3340; }
+        #hud .hud-group:last-child { border-right: 0; }
+        #hud .hud-title { color: #c9a227; font-size: 9px; font-weight: bold; }
+        #hud .stat.alert b { color: #fff; background: #dc2626; padding: 0 5px; border-radius: 3px; }
+        #hud .state-RUNNING b { color: #86efac; } #hud .state-DEGRADED b, #hud .state-UNKNOWN b { color: #fdba74; }
+        #hud .state-STOPPED b, #hud .state-STOPPING b { color: #fca5a5; }
+        #hud .lvl-name { color: #fde68a; } #hud .lvl-detail { color: #d1d5db; } #hud .lvl-bar { color: #c9a227; font-size: 9px; }
+        #hud .usage { display: flex; flex-direction: column; line-height: 1.15; min-width: 86px; }
+        #hud .usage-name { color: #9ca3af; font-size: 9px; } #hud .usage-val { font-size: 10px; } #hud .usage-sub { color: #6b7280; font-size: 9px; }
+        #hud .usage-UNKNOWN .usage-val { color: #94a3b8; } #hud .usage-WAITING_LIMIT .usage-val { color: #fbbf24; } #hud .usage-AVAILABLE .usage-val { color: #86efac; }
+        #mapStage { position: relative; }
+        .cc-plaque { position: absolute; width: 32px; height: 32px; z-index: 6; color: #1b1f29; font: bold 14px "Courier New", monospace; display: flex; align-items: center; justify-content: center; }
+        .cc-plaque.unlocked { background: radial-gradient(#fde68a, #c9a227); border: 1px solid #fff7d6; border-radius: 3px; box-shadow: 0 0 8px #e0b83a; }
+        .cc-feed { position: absolute; right: 8px; bottom: 8px; width: 420px; z-index: 7; background: rgba(17, 24, 39, 0.92); border: 1px solid #374151; border-radius: 6px; font: 10px "Courier New", monospace; color: #d1d5db; }
+        .cc-feed-head { width: 100%; text-align: left; padding: 4px 8px; color: #c9a227; font-weight: bold; background: none; border: 0; cursor: pointer; }
+        .cc-feed-list { max-height: 150px; overflow-y: auto; padding: 0 8px 6px; }
+        .cc-feed.collapsed .cc-feed-list { display: none; }
+        .cc-feed-row { display: flex; gap: 8px; padding: 1px 0; } .cc-feed-row.warn { color: #fca5a5; }
+        .cc-feed-ago { color: #6b7280; min-width: 28px; }
         #hud .stat b { color: #fff; font-size: 13px; margin-left: 4px; }
         #hud .stat span { color: #9ca3af; text-transform: uppercase; }
         #hud .sep { flex: 1; }
@@ -56,8 +74,8 @@
         #hud .dot.ok { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
         #hud .dot.bad { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
         #hud .health { color: #cbd5e1; white-space: nowrap; }
-        #agentCard {
-            position: absolute; z-index: 6; width: 340px; max-height: 520px; overflow-y: auto;
+        #agentCard { /* side drawer: details live here, not on the map */
+            position: fixed; top: 0; right: 0; height: 100vh; z-index: 40; width: 340px; overflow-y: auto;
             background: #111827; border: 1px solid #374151; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);
             color: #e5e7eb; font-size: 12px;
         }
@@ -86,21 +104,9 @@
 </head>
 <body>
     <div id="gameContainer">
-        <canvas id="gameCanvas" width="1152" height="992"></canvas>
-        <div id="hud">
-            <div class="stat"><span>Active agents</span><b id="hudActive">–</b></div>
-            <div class="stat"><span>Queued</span><b id="hudQueued">–</b></div>
-            <div class="stat"><span>Running</span><b id="hudRunning">–</b></div>
-            <div class="stat"><span>Pending approvals</span><b id="hudApprovals">–</b></div>
-            <div class="stat"><span>Completed today</span><b id="hudDone">–</b></div>
-            <div class="stat"><span>Failed</span><b id="hudFailed">–</b></div>
-            <div class="sep"></div>
-            <div class="health" title="OpenClaw Gateway (reported by the sync bridge)"><i class="dot" id="hGateway"></i>Gateway</div>
-            <div class="health" title="Pixel Office server"><i class="dot" id="hPixel"></i>Pixel Office</div>
-            <div class="health" title="OpenClaw -> Pixel Office sync bridge"><i class="dot" id="hBridge"></i>Sync Bridge</div>
-            <div class="health" title="OpenClaw scheduler (automations)"><i class="dot" id="hScheduler"></i>Scheduler</div>
-            <span id="timer" style="display:none">0</span>
-        </div>
+        <div id="hud"></div>
+        <div id="mapStage"><canvas id="gameCanvas" width="1152" height="672"></canvas></div>
+        <span id="timer" style="display:none">0</span>
         <div id="agentCard" class="hidden"></div>
     </div>
 
@@ -208,6 +214,7 @@
         </div>
     </div>
 
+    <script src="command-center.js"></script>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -247,8 +254,8 @@
         };
 
         const GRID_SIZE = 32;
-        const COLS = 36; // 1152/32
-        const ROWS = 31; // 992/32: original office rows 0-24 + Operations Room (rows 24-30)
+        let COLS = 36; // replaced at startup from assets/office-layout.json (layout-driven, not fixed)
+        let ROWS = 21; // replaced at startup from assets/office-layout.json
         const MAX_IDLE_FRAMES = 60 * 5; // ~5 segundos a 60fps
         // El live sync (servidor) decide dónde está cada agente: sin paseos aleatorios en reposo
         const IDLE_WANDER = false;
@@ -261,29 +268,10 @@
             for (let y = y1; y <= y2; y++) for (let x = x1; x <= x2; x++) tiles.push({x, y});
             return tiles;
         };
-        const DEFAULT_ROOMS = [
-            { id: 1, name: 'Command Center', tiles: rectTiles(15, 11, 20, 13) },
-            { id: 2, name: 'Research Lab', tiles: rectTiles(1, 2, 10, 8) },
-            { id: 3, name: 'Writing Studio', tiles: rectTiles(1, 10, 10, 15) },
-            { id: 4, name: 'Review Room', tiles: rectTiles(1, 17, 10, 23) },
-            { id: 5, name: 'Hangout Room', tiles: rectTiles(14, 19, 21, 23) },
-            { id: 6, name: 'Trading Floor', tiles: rectTiles(25, 2, 34, 6) },
-            { id: 7, name: 'Crypto Lab', tiles: rectTiles(25, 8, 34, 12) },
-            { id: 8, name: 'Memecoin War Room', tiles: rectTiles(25, 14, 34, 18) },
-            { id: 9, name: 'Sports Analytics Room', tiles: rectTiles(25, 20, 34, 23) },
-            { id: 10, name: 'Operations Room', tiles: rectTiles(1, 25, 34, 29) }
-        ];
-        const DEFAULT_AGENTS = [
-            { id: 'coordinator', name: 'Diktator', role: 'Coordinator', color: 0, room: 'Command Center' },
-            { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, room: 'Research Lab' },
-            { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, room: 'Writing Studio' },
-            { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, room: 'Review Room' },
-            { id: 'market_trader', name: 'Trader', role: 'Market Trader (paper)', color: 4, room: 'Trading Floor' },
-            { id: 'crypto_analyst', name: 'Crypto', role: 'Crypto Analyst (paper)', color: 5, room: 'Crypto Lab' },
-            { id: 'memecoin_scout', name: 'Memecoin Scout', role: 'Memecoin Scout (research only)', color: 6, room: 'Memecoin War Room' },
-            { id: 'sports_analyst', name: 'Sports Analyst', role: 'Sports Analyst (paper)', color: 7, room: 'Sports Analytics Room' },
-            { id: 'operations', name: 'Operator', role: 'Operations (runtime visibility, read-only)', color: 8, room: 'Operations Room' }
-        ];
+        // Rooms and agents come from the generated layout (tools/office-spec.json); no hard-coded lists.
+        let DEFAULT_ROOMS = [];
+        let DEFAULT_AGENTS = [];
+        const officeLayoutPromise = fetch('assets/office-layout.json').then(r => r.json()).catch(() => null);
 
         // Colores del log/filtros por índice de sprite
         const AGENT_COLORS = [
@@ -1103,8 +1091,27 @@
         window.characters = [];
         
         // Load configuration from SERVER (not localStorage) - shared for all users
+        let OFFICE_LAYOUT = null;
+        async function applyOfficeLayout() {
+            const layout = await officeLayoutPromise;
+            if (!layout || !Number.isInteger(layout.cols) || !Number.isInteger(layout.rows)) return;
+            OFFICE_LAYOUT = layout;
+            COLS = layout.cols;
+            ROWS = layout.rows;
+            canvas.width = COLS * GRID_SIZE;
+            canvas.height = ROWS * GRID_SIZE;
+            DEFAULT_ROOMS = Array.isArray(layout.rooms) ? layout.rooms : [];
+            DEFAULT_AGENTS = (layout.agents || []).filter(a => a.enabled).map(a => ({ id: a.id, name: a.name, role: a.role, color: a.color, room: a.room }));
+            default_COLLISION_MAP = padCollision(layout.collision);
+            COLLISION_MAP = default_COLLISION_MAP; // generated layout is authoritative; the server copy may refine it below
+            if (!window.roomsInfo || !window.roomsInfo.length) {
+                window.roomsInfo = DEFAULT_ROOMS.map(r => { const f = walkableTiles(r)[0] || r.tiles[0]; return { id: r.id, name: r.name, x: f.x, y: f.y, tiles: r.tiles }; });
+            }
+        }
+
         async function loadConfig() {
             window.characters = [];
+            await applyOfficeLayout();
 
             try {
                 // Load collision map from server
@@ -1294,7 +1301,7 @@
             for (const char of list) {
                 const status = effectiveStatus(char);
                 const color = STATUS_COLORS[status] || STATUS_COLORS.IDLE;
-                const compact = status === 'IDLE';
+                const compact = true; // map shows name + state colour only; details live in the agent drawer
                 // Vecinos en el Hangout (1 tile de distancia): alternar altura para no solaparse
                 const stagger = compact && (Math.floor(char.x / GRID_SIZE) % 2) ? -12 : 0;
                 let y = char.y - 70 + stagger;
@@ -1897,6 +1904,8 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
                 (w.message ? '<div style="font-size:11px;color:#d1d5db;margin-top:5px">' + esc(w.message) + '</div>' : '') +
                 progress +
                 (meta.length ? '<div class="t-meta">' + meta.join(' · ') + '</div>' : '') +
+                (window.__cc ? window.__cc.workerModel(Object.assign({}, w, ((window.__cc.overview || {}).workers || []).find(x => x.id === w.id) || {})).lines
+                    .map(l => '<div class="t-meta">' + esc(l) + '</div>').join('') : '') +
                 workerControlsHtml(w) +
                 '<div class="t-meta">id ' + esc(w.id || '') + '</div>' +
             '</div>';
@@ -2046,22 +2055,7 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
             if (upd) upd.textContent = taskFeedCache.updatedAt ? 'ledger synced ' + fmtTime(taskFeedCache.updatedAt) : 'waiting for sync bridge';
         }
         function renderHud() {
-            const tasks = taskFeedCache.tasks || [];
-            const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
-            const chars = window.characters || [];
-            set('hudActive', chars.filter(c => !['IDLE', 'OFFLINE'].includes(effectiveStatus(c))).length);
-            set('hudQueued', tasks.filter(t => t.status === 'queued').length);
-            set('hudRunning', tasks.filter(t => t.status === 'running').length);
-            set('hudApprovals', tasks.filter(t => t.status === 'waiting_approval').length);
-            set('hudDone', tasks.filter(t => t.status === 'completed' && (t.endedAt || 0) >= midnight.getTime()).length);
-            set('hudFailed', tasks.filter(t => ['failed', 'timed_out'].includes(t.status) && (t.endedAt || 0) >= midnight.getTime()).length);
-            const h = systemHealth;
-            const dot = (id, ok) => { const e = document.getElementById(id); if (e) e.className = 'dot ' + (ok === true ? 'ok' : ok === false ? 'bad' : ''); };
-            dot('hPixel', h ? true : false);
-            dot('hBridge', h ? h.bridge.ok : undefined);
-            dot('hGateway', h ? h.gateway.ok : undefined);
-            dot('hScheduler', h ? !!(h.scheduler && h.scheduler.ok) : undefined);
+            if (window.__cc) window.__cc.renderHud();
         }
         async function refreshCommandCenter() {
             try { taskFeedCache = await (await fetch('/api/tasks')).json(); } catch (e) {}
@@ -2074,6 +2068,12 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
             if (openCardAgentId) renderAgentCard(openCardAgentId);
         }
         setInterval(refreshCommandCenter, 5000);
+        // Command-center module: grouped HUD, level, usage, plaques, activity (one shared poll).
+        window.__cc = window.CommandCenter ? window.CommandCenter.mount({
+            doc: document, stage: document.getElementById('mapStage'), hud: document.getElementById('hud'),
+            fetchImpl: window.fetch.bind(window), layoutPromise: officeLayoutPromise,
+            getHudInputs: () => ({ tasks: taskFeedCache.tasks || [], chars: window.characters || [], health: systemHealth, effectiveStatus })
+        }) : null;
         refreshCommandCenter();
 
         // Ficha de agente (clic sobre un personaje del mapa)
@@ -2096,6 +2096,12 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
                 '<div class="px-3 py-2 space-y-2">' +
                     '<div><span class="pill" style="background:' + color + '">' + esc(status) + '</span>' +
                     '<span class="text-[10px] text-gray-500 ml-2">last activity ' + (lastActivity ? fmtTime(lastActivity) : '–') + '</span></div>' +
+                    (function () {
+                        const m = window.__cc ? window.__cc.agentMeta(id) : { model: 'unknown', room: char.defaultRoom, escalation: 'none recorded', serviceHealth: null };
+                        const row = (k, v) => '<div class="flex justify-between"><span class="text-[10px] text-gray-500 uppercase">' + esc(k) + '</span><span class="text-gray-200">' + esc(v) + '</span></div>';
+                        return row('Model', m.model || 'unknown') + row('Room', m.room || char.defaultRoom || '—') +
+                            (m.serviceHealth ? row('Service health', m.serviceHealth) : '') + row('Escalation', m.escalation);
+                    })() +
                     '<div><div class="text-[10px] text-gray-500 uppercase">Current task</div><div class="text-gray-200">' + (char.task ? esc(char.task) : '<span class="text-gray-600">none</span>') + '</div></div>' +
                     '<div><div class="text-[10px] text-gray-500 uppercase mb-1">Recent tasks</div>' +
                         (mine.length ? mine.slice(0, 5).map(t => taskCardHtml(t, (TASK_GROUPS.find(g => g.match(t)) || TASK_GROUPS[0]).color)).join('') : '<div class="text-gray-600">none yet</div>') + '</div>' +
@@ -2110,11 +2116,7 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
             const card = document.getElementById('agentCard');
             openCardAgentId = char.id;
             renderAgentCard(char.id);
-            card.classList.remove('hidden');
-            const left = Math.min(Math.max(char.x + 24, 8), canvas.width - 348);
-            const top = Math.min(Math.max(char.y - 120, 36), canvas.height - 530);
-            card.style.left = left + 'px';
-            card.style.top = top + 'px';
+            card.classList.remove('hidden'); // fixed side drawer (CSS)
         }
         function closeAgentCard() {
             openCardAgentId = null;

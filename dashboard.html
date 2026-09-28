@@ -154,7 +154,7 @@
                         <p class="text-sm text-slate-400 mb-4" id="mapInstruction">Select a character from the list to place it.</p>
                         
                         <!-- Contenedor del minimapa -->
-                        <div class="relative mx-auto border-2 border-slate-600 rounded overflow-hidden shadow-inner bg-slate-900" style="width: 576px; height: 496px; cursor: crosshair;" onclick="handleMinimapClick(event)" id="minimapWrap">
+                        <div class="relative mx-auto border-2 border-slate-600 rounded overflow-hidden shadow-inner bg-slate-900" style="width: 576px; height: 336px; cursor: crosshair;" onclick="handleMinimapClick(event)" id="minimapWrap">
                             <img id="officePreview" src="assets/oficina-placeholder.png" class="w-full h-full object-cover pixel-art opacity-60" draggable="false" alt="Office layout preview">
                             <div id="markersContainer" class="absolute inset-0 pointer-events-none"></div>
                         </div>
@@ -246,8 +246,8 @@
 
     <script>
         // CONFIG CONSTANTS  (Using map size from index)
-        const COLS = 36;
-        const ROWS = 31; // original office rows 0-24 + Operations Room (rows 24-30)
+        let COLS = 36; // replaced at startup from assets/office-layout.json (layout-driven)
+        let ROWS = 21; // replaced at startup from assets/office-layout.json
         const NUM_CHARS = 6;
         const MINIMAP_SCALE = 0.5; // (576/1152)
         const TILE_SIZE = 32;
@@ -309,7 +309,21 @@
         let isMouseDown = false;
 
         // AUTH
+        // Map size comes from the generated layout, never a fixed constant.
+        async function applyLayoutSize() {
+            try {
+                const layout = await (await fetch('assets/office-layout.json')).json();
+                if (!Number.isInteger(layout.cols) || !Number.isInteger(layout.rows)) return;
+                COLS = layout.cols; ROWS = layout.rows;
+                const grid = document.getElementById('interactiveGrid');
+                if (grid) { grid.style.gridTemplateColumns = `repeat(${COLS}, 16px)`; grid.style.gridTemplateRows = `repeat(${ROWS}, 16px)`; }
+                const box = document.getElementById('minimapWrap');
+                if (box) { box.style.width = (COLS * TILE_SIZE * MINIMAP_SCALE) + 'px'; box.style.height = (ROWS * TILE_SIZE * MINIMAP_SCALE) + 'px'; }
+            } catch (e) { /* keep defaults */ }
+        }
+
         async function initApp() {
+            await applyLayoutSize();
             if (sessionStorage.getItem('pixelAdminAuth') === 'true') {
                 await showDashboard();
             } else {

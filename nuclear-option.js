@@ -13,8 +13,12 @@
   else {
     root.NuclearOption = api;
     const boot = () => {
-      const container = document.getElementById('gameContainer');
-      if (container) api.createNuclearOption({ doc: document, container, fetchImpl: window.fetch.bind(window) }).start();
+      const container = document.getElementById('mapStage') || document.getElementById('gameContainer');
+      if (!container) return;
+      // Lever position comes from the generated layout (ui.lever); constant fallback.
+      fetch('assets/office-layout.json').then((r) => r.json()).catch(() => null).then((layout) => {
+        api.createNuclearOption({ doc: document, container, fetchImpl: window.fetch.bind(window), position: api.leverPositionFromLayout(layout) }).start();
+      });
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
@@ -164,7 +168,15 @@
     '@keyframes nuclearWarn{0%,100%{filter:drop-shadow(0 0 1px #f97316)}50%{filter:drop-shadow(0 0 6px #f97316)}}',
   ].join('\n');
 
-  function createNuclearOption({ doc, container, fetchImpl, pollMs = 10000, setIntervalImpl = (typeof setInterval === 'function' ? setInterval : null) }) {
+  // Lever anchored on its layout tile: centred horizontally, sprite bottom on the tile bottom.
+  function leverPositionFromLayout(layout) {
+    const l = layout && layout.ui && layout.ui.lever;
+    const tile = (layout && layout.tile) || 32;
+    if (!l || !Number.isInteger(l.x) || !Number.isInteger(l.y)) return POSITION;
+    return { left: l.x * tile + tile / 2, top: (l.y + 1) * tile - SPRITE.h * SPRITE.scale };
+  }
+
+  function createNuclearOption({ doc, container, fetchImpl, position = POSITION, pollMs = 10000, setIntervalImpl = (typeof setInterval === 'function' ? setInterval : null) }) {
     const el = (tag, props = {}) => {
       const node = doc.createElement(tag);
       for (const [k, v] of Object.entries(props)) {
@@ -177,8 +189,8 @@
 
     const style = el('style', { text: CSS });
     const wrap = el('div', { id: 'nuclearOption', attrs: { 'data-tone': 'unknown', 'data-locked': 'true', 'aria-label': 'Global kill switch' } });
-    wrap.style.left = POSITION.left + 'px';
-    wrap.style.top = POSITION.top + 'px';
+    wrap.style.left = position.left + 'px';
+    wrap.style.top = position.top + 'px';
 
     // The lever: a focusable element (role=button for keyboard/screen readers) whose
     // visible form is a pixel-art lever sprite plus a brass plaque.
@@ -311,5 +323,5 @@
     return api;
   }
 
-  return { createNuclearOption, viewModel, drawLever, LABEL, CONFIRM_TEXT, STOP_URL, STATUS_URL, POSITION, SPRITE };
+  return { createNuclearOption, viewModel, drawLever, leverPositionFromLayout, LABEL, CONFIRM_TEXT, STOP_URL, STATUS_URL, POSITION, SPRITE };
 });

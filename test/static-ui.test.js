@@ -37,14 +37,17 @@ function blueComponents(img) {
   return { comps, isBlue };
 }
 
-test('three rectangular Finnish flags (~11:18) with the official cross geometry', () => {
+test('every Oval Office flag is a rectangular Finnish flag (~11:18) with the official cross geometry', () => {
   const src = read('tools/build-office-map.js');
   assert.doesNotMatch(src, /stars & stripes|#b22234|#3c3b6e/i, 'no US flag drawing code');
   const png = decodePng(path.join(REPO, 'assets/office-openclaw.png'));
   assert.equal(countColor(png, [0xb2, 0x22, 0x34]), 0, 'no US-flag red pixels');
   assert.equal(countColor(png, [0x3c, 0x3b, 0x6e]), 0, 'no US-flag canton pixels');
   const { comps, isBlue } = blueComponents(png);
-  assert.equal(comps.length, 3, 'exactly three flags');
+  const spec = JSON.parse(read('tools/office-spec.json'));
+  const flagCount = Object.values(spec.rooms).reduce((n, r) => n + r.template.reduce((m, row) => m + (row.match(/(?<!f)f/g) || []).length, 0), 0);
+  assert.equal(comps.length, flagCount, 'one Finnish flag per flag stand in the spec');
+  assert.ok(flagCount >= 2);
   const runs = (cells) => cells.join('').match(/(.)\1*/g).map((r) => r.length / 2); // screen px -> art px
   for (const c of comps) {
     const W = c.maxx - c.minx + 1, H = c.maxy - c.miny + 1;
@@ -60,24 +63,9 @@ test('three rectangular Finnish flags (~11:18) with the official cross geometry'
       const o = (y * png.w + x) * png.ch; assert.deepEqual([png.out[o], png.out[o + 1], png.out[o + 2]], [0xf7, 0xf7, 0xf4]);
     }
   }
-  // The three intended locations: two Grand Hall stands and one inside the Oval Office.
-  const tiles = comps.map((c) => `${Math.floor(c.minx / 32)},${Math.floor(c.miny / 32)}`).sort();
-  assert.deepEqual(tiles, ['14,4', '17,9', '21,4']);
-});
-
-test('vs the original map: only the flags, the new Hangout seat and the row-24 divider changed', () => {
-  const before = decodePng(path.join(REPO, 'test/fixtures/original-office-openclaw.png')); // original committed map
-  const after = decodePng(path.join(REPO, 'assets/office-openclaw.png'));
-  assert.equal(before.w, after.w);
-  const allowed = new Set(['14,4', '21,4', '17,9', '18,22']);
-  for (let x = 0; x < 36; x++) allowed.add(`${x},24`);
-  const tiles = new Set();
-  for (let y = 0; y < before.h; y++) for (let x = 0; x < before.w; x++) {
-    const o1 = (y * before.w + x) * before.ch, o2 = (y * after.w + x) * after.ch;
-    if (before.out.compare(after.out, o1, o1 + 3, o2, o2 + 3) !== 0) tiles.add(`${Math.floor(x / 32)},${Math.floor(y / 32)}`);
-  }
-  for (const t of tiles) assert.ok(allowed.has(t), `unexpected change in tile ${t}`);
-  for (const t of ['14,4', '21,4', '17,9', '18,22']) assert.ok(tiles.has(t), `expected change in ${t}`);
+  const L = JSON.parse(read('assets/office-layout.json'));
+  const oval = L.rooms.find((r) => r.name === 'Command Center');
+  for (const c of comps) assert.ok(oval.tiles.some((t) => t.x === Math.floor(c.minx / 32) && t.y === Math.floor(c.miny / 32)), 'flag inside the Oval Office');
 });
 
 test('no US flag emoji anywhere in served UI files; unrelated en-US locale untouched', () => {
@@ -96,23 +84,9 @@ test('index.html: nuclear-option script added once; existing worker controls pre
   }
 });
 
-test('original office layout preserved exactly (rooms, targets, seats, spawns, collision)', () => {
-  const O = JSON.parse(read('test/fixtures/original-office-layout.json')); // original committed map (pre-change)
-  const N = JSON.parse(read('assets/office-layout.json'));
-  assert.equal(N.cols, O.cols);
-  for (const r of O.rooms) assert.deepEqual(N.rooms.find((x) => x.name === r.name), r, r.name);
-  for (const [k, v] of Object.entries(O.targets.work)) assert.deepEqual(N.targets.work[k], v, k);
-  assert.deepEqual(N.targets.idle.slice(0, O.targets.idle.length), O.targets.idle);
-  assert.deepEqual(N.targets.idleOverrides, O.targets.idleOverrides);
-  for (const [k, v] of Object.entries(O.spawns || {})) assert.deepEqual(N.spawns[k], v, k);
-  const diffs = [];
-  for (let y = 0; y < O.rows; y++) for (let x = 0; x < O.cols; x++) if (O.collision[y][x] !== N.collision[y][x]) diffs.push(`${x},${y}:${O.collision[y][x]}->${N.collision[y][x]}`);
-  assert.deepEqual(diffs.sort(), ['12,24:1->2', '18,22:0->3', '23,24:1->2'], 'only the new Hangout seat and the two Operations doors');
-});
-
 test('server.js and new modules parse', () => {
   const { execFileSync } = require('child_process');
-  for (const f of ['server.js', 'killswitch-bridge.js', 'nuclear-option.js', 'tools/build-office-map.js', 'openclaw-pixel-sync.js']) {
+  for (const f of ['server.js', 'killswitch-bridge.js', 'business-bridge.js', 'activity.js', 'command-center.js', 'nuclear-option.js', 'tools/build-office-map.js', 'openclaw-pixel-sync.js']) {
     execFileSync(process.execPath, ['--check', path.join(REPO, f)]);
   }
 });

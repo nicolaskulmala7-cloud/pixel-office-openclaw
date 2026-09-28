@@ -68,11 +68,14 @@ test('the Nuclear Option is a red pixel-art lever inside the Oval Office, not a 
   assert.ok(n.sprite.ctx.count(RED) >= 24, 'large red grip is painted (14x2 minus highlight)');
   assert.equal(n.sprite.width, 16);
   assert.equal(n.sprite.height, 28);
-  // Oval Office = "Command Center" tiles x15-20, y9-15 (32 px).
-  const cc = require('../assets/office-layout.json').rooms.find((r) => r.name === 'Command Center');
-  const xs = cc.tiles.map((t) => t.x * 32), ys = cc.tiles.map((t) => t.y * 32);
-  assert.ok(POSITION.left >= Math.min(...xs) && POSITION.left <= Math.max(...xs) + 32);
-  assert.ok(POSITION.top >= Math.min(...ys) && POSITION.top + SPRITE.h * SPRITE.scale <= Math.max(...ys) + 32);
+  // Position comes from the generated layout's lever tile, inside the Oval Office.
+  const layout = require('../assets/office-layout.json');
+  const oval = layout.rooms.find((r) => r.name === 'Command Center');
+  assert.ok(oval.tiles.some((t) => t.x === layout.ui.lever.x && t.y === layout.ui.lever.y), 'lever tile inside the Oval Office');
+  const pos = require('../nuclear-option').leverPositionFromLayout(layout);
+  assert.equal(pos.left, layout.ui.lever.x * 32 + 16);
+  assert.equal(pos.top + SPRITE.h * SPRITE.scale, (layout.ui.lever.y + 1) * 32, 'sprite stands on its tile');
+  assert.deepEqual(require('../nuclear-option').leverPositionFromLayout(null), POSITION, 'fallback without a layout');
   const css = doc.head.children[0].textContent;
   assert.match(css, /#nuclearLever canvas\{width:32px;height:56px;image-rendering:pixelated/);
 });
