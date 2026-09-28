@@ -1,0 +1,20 @@
+[Unit]
+Description=Pixel Office <-> OpenClaw Gateway live sync bridge
+After=network-online.target openclaw-gateway.service pixel-office.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mestari/pixel-office-openclaw
+ExecStart=/usr/bin/node /home/mestari/pixel-office-openclaw/openclaw-pixel-sync.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18789
+Environment=PIXEL_OFFICE_URL=http://127.0.0.1:19000
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

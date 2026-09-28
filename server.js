@@ -425,7 +425,10 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Pixel Office v3 en http://0.0.0.0:${PORT}`);
+// Solo loopback: el acceso remoto se hace por túnel SSH
+const HOST = '127.0.0.1';
+
+app.listen(PORT, HOST, () => {
+  console.log(`Pixel Office v3 en http://${HOST}:${PORT}`);
   console.log('Agentes activos:', config.agents.filter(a => a.active).map(a => a.name).join(', '));
 });
