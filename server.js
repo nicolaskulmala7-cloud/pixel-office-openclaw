@@ -97,27 +97,87 @@ const PORT = parseInt(process.env.PORT, 10) || 19000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-// Configuración inicial: todos los agentes disponibles, activados según checks
-let config = {
-  agents: [
-    { id: 0, name: "Dustin", role: "Agente Principal", color: 0, x: 320, y: 400, state: "idle", active: true },
-    { id: 1, name: "Pep", role: "Gestor de Correo", color: 1, x: 200, y: 300, state: "idle", active: true },
-    { id: 2, name: "Agente 3", role: "Sin rol", color: 2, x: 400, y: 500, state: "idle", active: false },
-    { id: 3, name: "Agente 4", role: "Sin rol", color: 3, x: 500, y: 400, state: "idle", active: false },
-    { id: 4, name: "Agente 5", role: "Sin rol", color: 4, x: 150, y: 600, state: "idle", active: false },
-    { id: 5, name: "Agente 6", role: "Sin rol", color: 5, x: 450, y: 200, state: "idle", active: false }
-  ],
-  rooms: [
-    { name: "Recepción", x: 320, y: 700 },
-    { name: "Sala Principal", x: 320, y: 400 },
-    { name: "Sala Reuniones", x: 320, y: 100 },
-    { name: "Despacho", x: 550, y: 200 },
-    { name: "Cafetería", x: 100, y: 600 }
-  ]
+// Equipo OpenClaw: los ids internos deben coincidir exactamente con los de OpenClaw.
+// `color` es el índice del sprite (assets/characters/char_N.png).
+const TILE = 32;
+const tileCenter = (t) => t * TILE + TILE / 2;
+
+// Rectángulos en coordenadas de tile (inclusive) sobre el plano por defecto
+const rectTiles = (x1, y1, x2, y2) => {
+  const tiles = [];
+  for (let y = y1; y <= y2; y++) {
+    for (let x = x1; x <= x2; x++) tiles.push({ x, y });
+  }
+  return tiles;
 };
 
-const defaultAgents = JSON.parse(JSON.stringify(config.agents));
-const defaultRooms = JSON.parse(JSON.stringify(config.rooms));
+const DEFAULT_ROOMS = [
+  { id: 1, name: 'Command Center', color: '#3b82f6', tiles: rectTiles(7, 3, 12, 7) },
+  { id: 2, name: 'Research Lab', color: '#ec4899', tiles: rectTiles(1, 10, 11, 16) },
+  { id: 3, name: 'Writing Studio', color: '#10b981', tiles: rectTiles(13, 10, 18, 16) },
+  { id: 4, name: 'Review Room', color: '#f59e0b', tiles: rectTiles(13, 19, 18, 22) }
+];
+
+const DEFAULT_AGENTS = [
+  { id: 'coordinator', name: 'Chief of Staff', role: 'Coordinator', color: 0, x: tileCenter(9), y: tileCenter(7), room: 'Command Center' },
+  { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, x: tileCenter(5), y: tileCenter(11), room: 'Research Lab' },
+  { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, x: tileCenter(15), y: tileCenter(11), room: 'Writing Studio' },
+  { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, x: tileCenter(15), y: tileCenter(20), room: 'Review Room' }
+].map(a => ({ ...a, personality: 'Trabajador', state: 'idle', active: true }));
+
+// Salas del demo original (sin tiles); si el mapa guardado solo contiene estas, se reemplaza
+const LEGACY_DEMO_ROOM_NAMES = ['Recepción', 'Sala Principal', 'Sala Reuniones', 'Despacho', 'Cafetería'];
+
+const OPENCLAW_IDS = DEFAULT_AGENTS.map(a => a.id);
+const SAFE_AGENT_ID = /^[A-Za-z0-9_-]+$/;
+const clone = (v) => JSON.parse(JSON.stringify(v));
+
+// Los agentes demo usaban ids numéricos (0-5); se descartan y se garantizan los 4 de OpenClaw.
+// Se conservan los cambios guardados (nombre, posición, sala...) de los agentes OpenClaw.
+const normalizeAgents = (agents) => {
+  const list = Array.isArray(agents) ? agents : [];
+  const kept = list.filter(a => a && typeof a.id === 'string' && SAFE_AGENT_ID.test(a.id));
+  const result = DEFAULT_AGENTS.map(def => {
+    const saved = kept.find(a => a.id === def.id);
+    return saved ? { ...def, ...saved } : clone(def);
+  });
+  kept.forEach(a => {
+    if (!OPENCLAW_IDS.includes(a.id)) result.push(a);
+  });
+  return result;
+};
+
+const isLegacyDemoRooms = (rooms) =>
+  Array.isArray(rooms) && rooms.every(r =>
+    r && LEGACY_DEMO_ROOM_NAMES.includes(r.name) && !(Array.isArray(r.tiles) && r.tiles.length)
+  );
+
+// Sin salas o con las del demo -> salas por defecto. Con salas propias -> se añaden las que falten.
+const normalizeRooms = (rooms) => {
+  if (!Array.isArray(rooms) || !rooms.length || isLegacyDemoRooms(rooms)) {
+    return clone(DEFAULT_ROOMS);
+  }
+  const result = [...rooms];
+  DEFAULT_ROOMS.forEach(def => {
+    if (!result.some(r => r && r.name === def.name)) result.push(clone(def));
+  });
+  return result;
+};
+
+// Copia única de los datos previos a la migración (nunca se sobrescribe)
+const backupOnce = (filePath, suffix) => {
+  if (!fs.existsSync(filePath)) return;
+  const backupPath = filePath.replace(/\.json$/, `.${suffix}.json`);
+  if (!fs.existsSync(backupPath)) {
+    fs.copyFileSync(filePath, backupPath);
+    console.log(`Backup created: ${backupPath}`);
+  }
+};
+
+let config = {
+  agents: clone(DEFAULT_AGENTS),
+  rooms: clone(DEFAULT_ROOMS)
+};
 
 // Cargar configuración guardada
 try {
@@ -133,7 +193,6 @@ try {
     if (Array.isArray(savedConfig.rooms)) {
       config.rooms = savedConfig.rooms;
     }
-    persistAgents(config.agents);
     console.log('Configuración cargada (legacy)');
   } else {
     console.log('Usando configuración inicial');
@@ -145,19 +204,32 @@ try {
 const initialMapData = loadMapData() || {};
 if (Array.isArray(initialMapData.rooms) && initialMapData.rooms.length) {
   config.rooms = initialMapData.rooms;
-} else if (!Array.isArray(initialMapData.rooms)) {
-  initialMapData.rooms = defaultRooms;
-}
-if (!fs.existsSync(MAP_PATH)) {
-  persistMapData({
-    rooms: initialMapData.rooms,
-    collision: initialMapData.collision || null
-  });
 }
 
-if (!fs.existsSync(AGENTS_PATH)) {
+// Migración al equipo OpenClaw
+const migratedAgents = normalizeAgents(config.agents);
+if (JSON.stringify(migratedAgents) !== JSON.stringify(config.agents)) {
+  backupOnce(AGENTS_PATH, 'pre-openclaw-backup');
+  config.agents = migratedAgents;
+  persistAgents(config.agents);
+  console.log('Agents migrated to the OpenClaw team');
+} else if (!fs.existsSync(AGENTS_PATH)) {
   persistAgents(config.agents);
 }
+
+const migratedRooms = normalizeRooms(config.rooms);
+if (JSON.stringify(migratedRooms) !== JSON.stringify(config.rooms) || !fs.existsSync(MAP_PATH)) {
+  backupOnce(MAP_PATH, 'pre-openclaw-backup');
+  config.rooms = migratedRooms;
+  persistMapData({
+    rooms: config.rooms,
+    collision: initialMapData.collision || null
+  });
+  console.log('Rooms migrated to the OpenClaw layout');
+}
+
+// Acepta solo ids seguros (se usan en rutas de archivo)
+const agentKey = (raw) => (SAFE_AGENT_ID.test(String(raw)) ? String(raw) : null);
 
 app.get('/api/config', (req, res) => {
   res.json({
@@ -180,11 +252,9 @@ app.post('/api/auth/login', (req, res) => {
 
 app.post('/api/config', (req, res) => {
   config = req.body || {};
-  if (!Array.isArray(config.agents)) {
-    config.agents = defaultAgents;
-  }
+  config.agents = normalizeAgents(config.agents);
   if (!Array.isArray(config.rooms)) {
-    config.rooms = defaultRooms;
+    config.rooms = clone(DEFAULT_ROOMS);
   }
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
   persistAgents(config.agents);
@@ -194,9 +264,9 @@ app.post('/api/config', (req, res) => {
 });
 
 app.post('/api/agent/:id/move', (req, res) => {
-  const id = parseInt(req.params.id);
+  const id = agentKey(req.params.id);
   const { x, y, state } = req.body;
-  const agent = config.agents.find(a => a.id === id);
+  const agent = config.agents.find(a => String(a.id) === id);
   if (agent) {
     if (x !== undefined) agent.x = x;
     if (y !== undefined) agent.y = y;
@@ -237,8 +307,8 @@ const agentCommands = {};
 const commandTimestamps = {};
 
 app.get('/api/agent/:id/command', (req, res) => {
-  const id = parseInt(req.params.id);
-  const cmd = agentCommands[id];
+  const id = agentKey(req.params.id);
+  const cmd = id && agentCommands[id];
   
   // Si hay comando y tiene menos de 30 segundos, devolverlo y consumirlo inmediatamente
   if (cmd && commandTimestamps[id]) {
@@ -259,7 +329,7 @@ app.get('/api/agent/:id/command', (req, res) => {
 
 // Endpoint para confirmar que el agente llegó físicamente al destino
 app.post('/api/agent/:id/arrived', (req, res) => {
-  const id = parseInt(req.params.id);
+  const id = agentKey(req.params.id);
   const { location } = req.body;
   
   // Crear archivo de señalización para el controller
@@ -273,14 +343,16 @@ app.post('/api/agent/:id/arrived', (req, res) => {
   res.json({ success: true });
 });
 app.post('/api/agent/:id/command/ack', (req, res) => {
-  const id = parseInt(req.params.id);
+  const id = agentKey(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid agent id' });
   agentCommands[id] = null;
   commandTimestamps[id] = null;
   res.json({ success: true });
 });
 
 app.post('/api/agent/:id/command', (req, res) => {
-  const id = parseInt(req.params.id);
+  const id = agentKey(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid agent id' });
   agentCommands[id] = req.body;
   commandTimestamps[id] = Date.now();
   console.log(`[Comando] Agente ${id}:`, req.body);
@@ -288,13 +360,15 @@ app.post('/api/agent/:id/command', (req, res) => {
 });
 app.get('/api/messages', (req, res) => {
   const messages = {};
-  for (let i = 0; i < 6; i++) {
+  config.agents.forEach(agent => {
+    const id = agentKey(agent.id);
+    if (!id) return;
     try {
-      messages[i] = fs.readFileSync(agentMessagePath(i), 'utf8');
+      messages[id] = fs.readFileSync(agentMessagePath(id), 'utf8');
     } catch (e) {
-      messages[i] = "";
+      messages[id] = "";
     }
-  }
+  });
   res.json(messages);
 });
 
@@ -344,7 +418,7 @@ app.get('/api/rooms', (req, res) => {
   } catch (e) {
     // ignore and fallback below
   }
-  res.json(config.rooms.map(r => ({ name: r.name, x: r.x, y: r.y, tiles: [] })));
+  res.json(config.rooms.map(r => ({ ...r, tiles: r.tiles || [] })));
 });
 
 app.use((req, res) => {

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oficina Pixel Art - Personaje Random</title>
+    <title>AI Agent Command Center</title>
     <style>
         body {
             margin: 0;
@@ -61,7 +61,7 @@
     <div id="gameContainer">
         <canvas id="gameCanvas" width="640" height="800"></canvas>
         <div id="ui">
-            <div>Tiempo: <span id="timer">0</span>s</div>
+            <div>Time: <span id="timer">0</span>s</div>
         </div>
     </div>
 
@@ -88,13 +88,13 @@
         <div id="viewChat" class="flex flex-col flex-1 overflow-hidden">
             <div class="flex-1 p-4 overflow-y-auto" id="chatHistory">
                 <div class="mb-4 text-xs text-gray-500 text-center border-b border-gray-700 pb-2">
-                    Sesión iniciada. Pide a los personajes que hagan tareas.
+                    Session started. Ask the characters to do tasks.
                 </div>
                 
                 <div class="space-y-4" id="chatMessages">
                     <div class="flex flex-col bg-gray-700/50 p-3 rounded-lg border border-gray-600/50 w-4/5">
-                        <span class="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-1">Guía del sistema</span>
-                        <span class="text-sm text-gray-200">Ejemplo: "Dile a character1 que vaya a la sala de reuniones" o "character2, quiero que te sientes a trabajar"</span>
+                        <span class="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-1">System guide</span>
+                        <span class="text-sm text-gray-200">Example: "Tell the Researcher to go to the Research Lab" or "Chief of Staff, sit down in the Command Center"</span>
                     </div>
                 </div>
             </div>
@@ -113,8 +113,8 @@
             <!-- Entrada de comandos -->
             <div class="p-4 bg-gray-800 border-t border-gray-700 rounded-b-lg">
                 <form id="aiPromptForm" class="flex gap-2">
-                    <input type="text" id="aiPromptInput" placeholder="Escribe tu comando..." class="flex-1 bg-gray-900 text-white placeholder-gray-500 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" autocomplete="off">
-                    <button type="button" id="micBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-300 p-2 rounded-lg transition-colors flex items-center justify-center relative group" title="Dictar por voz">
+                    <input type="text" id="aiPromptInput" placeholder="Type your command..." class="flex-1 bg-gray-900 text-white placeholder-gray-500 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" autocomplete="off">
+                    <button type="button" id="micBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-300 p-2 rounded-lg transition-colors flex items-center justify-center relative group" title="Voice dictation">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" x2="12" y1="19" y2="22"></line></svg>
                     </button>
                     <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg transition-colors flex items-center justify-center">
@@ -128,7 +128,7 @@
         <div id="viewLog" class="hidden" style="flex-direction: column; flex: 1; overflow: hidden;">
             <div style="flex: 1; padding: 16px; overflow-y: auto; background: #111827; max-height: 700px;" id="logContainer">
                 <div style="margin-bottom: 16px; font-size: 12px; color: #6b7280; text-align: center; border-bottom: 1px solid #374151; padding-bottom: 8px;">
-                    Registro de actividades
+                    Activity log
                 </div>
                 <div id="logEntries" style="font-family: monospace; font-size: 12px; display: flex; flex-direction: column; gap: 8px;">
                     <!-- Se llena dinámicamente -->
@@ -136,26 +136,11 @@
             </div>
             <div style="padding: 12px; background: #1f2937; border-top: 1px solid #374151;">
                 <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                    <button onclick="refreshLog()" style="flex: 1; background: #2563eb; color: white; padding: 8px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer;">🔄 Actualizar</button>
-                    <button onclick="clearLog()" style="flex: 1; background: #dc2626; color: white; padding: 8px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer;">🗑️ Limpiar</button>
+                    <button onclick="refreshLog()" style="flex: 1; background: #2563eb; color: white; padding: 8px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer;">🔄 Refresh</button>
+                    <button onclick="clearLog()" style="flex: 1; background: #dc2626; color: white; padding: 8px; border-radius: 4px; font-size: 12px; border: none; cursor: pointer;">🗑️ Clear</button>
                 </div>
-                <div style="font-size: 10px; color: #6b7280; display: flex; gap: 12px;">
-                    <button onclick="toggleLogFilter(0)" id="filterDustin" style="display: flex; align-items: center; gap: 4px; background: rgba(59, 130, 246, 0.1); border: none; cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: all 0.2s; opacity: 1;">
-                        <span style="display: inline-block; width: 12px; height: 12px; background: #3b82f6; border-radius: 2px;"></span>
-                        <span style="color: #60a5fa;">Dustin</span>
-                    </button>
-                    <button onclick="toggleLogFilter(1)" id="filterMarian" style="display: flex; align-items: center; gap: 4px; background: rgba(249, 115, 22, 0.1); border: none; cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: all 0.2s; opacity: 1;">
-                        <span style="display: inline-block; width: 12px; height: 12px; background: #f97316; border-radius: 2px;"></span>
-                        <span style="color: #fb923c;">Marian</span>
-                    </button>
-                    <button onclick="toggleLogFilter(2)" id="filterPep" style="display: flex; align-items: center; gap: 4px; background: rgba(34, 197, 94, 0.1); border: none; cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: all 0.2s; opacity: 1;">
-                        <span style="display: inline-block; width: 12px; height: 12px; background: #22c55e; border-radius: 2px;"></span>
-                        <span style="color: #4ade80;">Pep</span>
-                    </button>
-                    <button onclick="toggleLogFilter(3)" id="filterDoc" style="display: flex; align-items: center; gap: 4px; background: rgba(129, 140, 248, 0.1); border: none; cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: all 0.2s; opacity: 1;">
-                        <span style="display: inline-block; width: 12px; height: 12px; background: #818cf8; border-radius: 2px;"></span>
-                        <span style="color: #a5b4fc;">Doc</span>
-                    </button>
+                <div id="logFilterButtons" style="font-size: 10px; color: #6b7280; display: flex; flex-wrap: wrap; gap: 12px;">
+                    <!-- Se llena dinámicamente con los agentes -->
                 </div>
             </div>
         </div>
@@ -203,6 +188,42 @@
         const COLS = 20; // 640/32
         const ROWS = 25; // 800/32
         const MAX_IDLE_FRAMES = 60 * 5; // ~5 segundos a 60fps
+
+        // Equipo OpenClaw por defecto (se usa si el servidor no responde; el servidor es la fuente real)
+        const rectTiles = (x1, y1, x2, y2) => {
+            const tiles = [];
+            for (let y = y1; y <= y2; y++) for (let x = x1; x <= x2; x++) tiles.push({x, y});
+            return tiles;
+        };
+        const DEFAULT_ROOMS = [
+            { id: 1, name: 'Command Center', tiles: rectTiles(7, 3, 12, 7) },
+            { id: 2, name: 'Research Lab', tiles: rectTiles(1, 10, 11, 16) },
+            { id: 3, name: 'Writing Studio', tiles: rectTiles(13, 10, 18, 16) },
+            { id: 4, name: 'Review Room', tiles: rectTiles(13, 19, 18, 22) }
+        ];
+        const DEFAULT_AGENTS = [
+            { id: 'coordinator', name: 'Chief of Staff', role: 'Coordinator', color: 0, room: 'Command Center' },
+            { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, room: 'Research Lab' },
+            { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, room: 'Writing Studio' },
+            { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, room: 'Review Room' }
+        ];
+
+        // Colores del log/filtros por índice de sprite
+        const AGENT_COLORS = [
+            { color: '#3b82f6', text: '#60a5fa' },
+            { color: '#f97316', text: '#fdba74' },
+            { color: '#22c55e', text: '#4ade80' },
+            { color: '#818cf8', text: '#a5b4fc' },
+            { color: '#ec4899', text: '#f9a8d4' },
+            { color: '#eab308', text: '#fde047' }
+        ];
+
+        // Solo tiles pisables (suelo o silla) de una sala
+        function walkableTiles(room) {
+            return (room && room.tiles ? room.tiles : []).filter(t =>
+                COLLISION_MAP[t.y]?.[t.x] === 0 || COLLISION_MAP[t.y]?.[t.x] === 3
+            );
+        }
 
         // Matriz de colisiones (0=Suelo, 1=Pared/Mueble, 2=Puerta, 3=Silla)
         let default_COLLISION_MAP = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,0,3,1,1,3,0,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,0,3,1,1,3,0,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,0,3,1,1,3,0,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1],[1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,1,1,1,1,1,1,1,1,1,0,0,0,3,1,1,3,0,1],[1,0,0,3,0,0,3,0,0,3,0,0,1,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,1,0,3,1,1,3,0,1],[1,0,0,0,1,1,1,1,0,0,1,0,1,0,0,0,0,0,0,1],[1,0,0,3,0,0,3,0,0,3,0,0,1,0,1,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,1,1,1],[1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,2,1,1,1],[1,1,1,1,1,1,1,1,1,1,0,0,1,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],[1,0,0,0,1,1,1,1,0,0,0,0,1,0,1,1,1,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,3,0,0,0,1],[1,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]];
@@ -397,8 +418,8 @@
                     ctx.scale(-1, 1);
                 }
 
-                const charId = (characterAttr && characterAttr.id !== undefined) ? characterAttr.id : 0;
-                const charIndex = charId % this.sprites.chars.length;
+                const spriteSlot = (characterAttr && characterAttr.slot !== undefined) ? characterAttr.slot : 0;
+                const charIndex = spriteSlot % this.sprites.chars.length;
                 const charImg = this.sprites.chars[charIndex];
 
                 // Dibujar el nuevo sprite (centrado en X, hacia arriba en Y)
@@ -428,8 +449,10 @@
 
         // Clase Personaje
         class Character {
-            constructor(x, y, id = 0) {
-                this.id = id; this.name = "Personaje "+(id+1); // Para darles distinto aspecto
+            constructor(x, y, id, slot = 0) {
+                this.id = id; // id interno de OpenClaw (ej. "coordinator")
+                this.slot = slot; // índice del sprite (char_N.png)
+                this.name = String(id);
                 this.x = x;
                 this.y = y;
                 this.targetX = x;
@@ -450,8 +473,8 @@
                 this.stuckTimer = 0;
                 
                 // Aspecto aleatorio basado en el ID
-                this.outfitIndex = this.id % 6 + 1; // Outfit1 a Outfit6
-                this.hairIndex = this.id % 8; // 0 a 7
+                this.outfitIndex = this.slot % 6 + 1; // Outfit1 a Outfit6
+                this.hairIndex = this.slot % 8; // 0 a 7
             }
 
             update() {
@@ -459,7 +482,7 @@
                 this.actionTimer++;
 
                 if (!this.isWaiting) {
-                    const allowLongSit = (this.id === 1 && this.sitting);
+                    const allowLongSit = false; // (antes: excepción del agente demo con id 1)
                     const staticAction = this.action !== ACTIONS.WALKING && (!this.sitting || !allowLongSit);
                     if (staticAction && this.actionTimer > MAX_IDLE_FRAMES) {
                         this.moveToRandomPosition();
@@ -535,7 +558,7 @@
                                 if (chairOccupied) {
                                     // La silla está ocupada, mostrar mensaje y buscar otra
                                     this.isTalking = true;
-                                    this.bubbleText = "Ocupada...";
+                                    this.bubbleText = "Taken...";
                                     this.bubbleTimer = 60;
                                     
                                     // La silla está ocupada, buscar otra silla libre cercana
@@ -546,7 +569,7 @@
                                     } else {
                                         // No hay sillas libres, quedarse de pie
                                         this.isTalking = true;
-                                        this.bubbleText = "No hay sitio";
+                                        this.bubbleText = "No free seats";
                                         this.bubbleTimer = 60;
                                         this.action = ACTIONS.IDLE;
                                         this.sitting = false;
@@ -641,19 +664,19 @@
                     this.isTalking = true;
                     this.bubbleTimer = 200 + Math.random() * 100;
                     
-                    let texts = ["¿Hola?", "¡Hecho!", "...", "Revisando", "OK", "¿Qué tal?", "Mmm", "¡Vamos!"];
-                    
+                    let texts = ["Hello?", "Done!", "...", "Checking", "OK", "How's it going?", "Hmm", "Let's go!"];
+
                     if (this.role) {
-                        texts.push(`Soy ${this.role}`);
-                        texts.push(`Cosas de ${this.role}...`);
+                        texts.push(`I'm the ${this.role}`);
+                        texts.push(`${this.role} stuff...`);
                     }
 
                     if (this.personality === 'Trabajador') {
-                        texts.push("Mucho trabajo", "Focus...", "Productividad", "Sin pausa");
+                        texts.push("So much work", "Focus...", "Productivity", "No breaks");
                     } else if (this.personality === 'Inquieto') {
-                        texts.push("No puedo parar", "A caminar", "Estirar piernas", "¿Dónde voy?");
+                        texts.push("Can't sit still", "Going for a walk", "Stretching my legs", "Where to next?");
                     } else if (this.personality === 'Perezoso') {
-                        texts.push("Qué sueño", "El café por favor", "¿Ya es viernes?", "Zzz...");
+                        texts.push("So sleepy", "Coffee, please", "Is it Friday yet?", "Zzz...");
                     }
 
                     this.bubbleText = texts[Math.floor(Math.random() * texts.length)];
@@ -731,13 +754,13 @@
 
             getActionName(action) {
                 const names = {
-                    [ACTIONS.IDLE]: 'Descansando',
-                    [ACTIONS.WALKING]: 'Caminando',
-                    [ACTIONS.WORKING]: 'Trabajando',
-                    [ACTIONS.SITTING]: 'Sentado',
-                    [ACTIONS.DRINKING]: 'Tomando café',
-                    [ACTIONS.READING]: 'Leyendo',
-                    [ACTIONS.PHONE]: 'Al teléfono'
+                    [ACTIONS.IDLE]: 'Resting',
+                    [ACTIONS.WALKING]: 'Walking',
+                    [ACTIONS.WORKING]: 'Working',
+                    [ACTIONS.SITTING]: 'Sitting',
+                    [ACTIONS.DRINKING]: 'Having coffee',
+                    [ACTIONS.READING]: 'Reading',
+                    [ACTIONS.PHONE]: 'On the phone'
                 };
                 return names[action] || action;
             }
@@ -980,13 +1003,16 @@
                     const roomsResponse = await fetch('/api/rooms');
                     const roomsData = await roomsResponse.json();
                     if (roomsData && Array.isArray(roomsData)) {
-                        window.roomsInfo = roomsData.map(r => ({
-                            id: r.id,
-                            name: r.name,
-                            x: r.tiles && r.tiles.length > 0 ? r.tiles[0].x : 0,
-                            y: r.tiles && r.tiles.length > 0 ? r.tiles[0].y : 0,
-                            tiles: r.tiles || []
-                        }));
+                        window.roomsInfo = roomsData.map(r => {
+                            const first = walkableTiles(r)[0] || (r.tiles && r.tiles[0]) || { x: 0, y: 0 };
+                            return {
+                                id: r.id,
+                                name: r.name,
+                                x: first.x,
+                                y: first.y,
+                                tiles: r.tiles || []
+                            };
+                        });
                         console.log('Rooms loaded from server:', window.roomsInfo.length);
                     }
                 } catch(e) {
@@ -995,63 +1021,58 @@
 
                 const response = await fetch('/api/config');
                 const config = await response.json();
-                
-                for (let i = 0; i < 6; i++) {
-                    let charConfig = config.agents.find(a => a.id === i);
-                    
-                    // Check if char is marked as inactive
-                    if (charConfig && charConfig.active === false) {
-                        continue;
-                    }
+                if (!config || !Array.isArray(config.agents)) throw new Error('No agents in server config');
 
-                    let char = new Character(0, 0, i);
-                    
-                    if (charConfig) {
-                        char.name = charConfig.name || ("Personaje " + (i + 1));
-                        char.role = charConfig.role || "";
-                        char.defaultRoom = "";
-                        char.personality = "Trabajador";
-                        // Use server position or random
-                        if (charConfig.x !== undefined && charConfig.y !== undefined) {
-                            char.x = charConfig.x;
-                            char.y = charConfig.y;
-                        } else {
-                            let rt = char.getValidRandomTile(true);
-                            char.x = rt.x * GRID_SIZE + GRID_SIZE/2;
-                            char.y = rt.y * GRID_SIZE + GRID_SIZE/2;
-                        }
-                    } else {
-                        char.name = "Personaje " + (i + 1);
-                        let rt = char.getValidRandomTile(true);
-                        char.x = rt.x * GRID_SIZE + GRID_SIZE/2;
-                        char.y = rt.y * GRID_SIZE + GRID_SIZE/2;
-                    }
-                    char.targetX = char.x;
-                    char.targetY = char.y;
-                    window.characters.push(char);
-                }
-                
-                // Update buttons after loading
-                setTimeout(updateCharacterButtons, 100);
-                
+                config.agents.forEach((agentConfig, index) => {
+                    // Check if char is marked as inactive
+                    if (agentConfig.active === false) return;
+                    window.characters.push(createCharacter(agentConfig, index));
+                });
+
             } catch(e) {
                 console.error("Error loading config from server:", e);
                 initDefault();
             }
-            
+
+            // Update buttons, room shortcuts and log filters after loading
+            renderQuickRooms();
+            setTimeout(updateCharacterButtons, 100);
+            initLogFilters();
+
             startTime = Date.now();
         }
 
-        function initDefault() {
-            for (let i = 0; i < 6; i++) {
-                let char = new Character(0, 0, i);
-                let rt = char.getValidRandomTile(true);
+        function createCharacter(agentConfig, index) {
+            const slot = Number.isInteger(agentConfig.color) ? agentConfig.color : index;
+            const char = new Character(0, 0, agentConfig.id, slot);
+            char.name = agentConfig.name || String(agentConfig.id);
+            char.role = agentConfig.role || "";
+            char.defaultRoom = agentConfig.room || "";
+            char.personality = agentConfig.personality || "Trabajador";
+
+            // Use server position, else a tile in the default room, else random
+            if (agentConfig.x !== undefined && agentConfig.y !== undefined) {
+                char.x = agentConfig.x;
+                char.y = agentConfig.y;
+            } else {
+                const room = (window.roomsInfo || []).find(r => r.name === char.defaultRoom);
+                const tiles = walkableTiles(room);
+                const rt = tiles.length > 0
+                    ? tiles[Math.floor(Math.random() * tiles.length)]
+                    : char.getValidRandomTile(true);
                 char.x = rt.x * GRID_SIZE + GRID_SIZE/2;
                 char.y = rt.y * GRID_SIZE + GRID_SIZE/2;
-                char.targetX = char.x;
-                char.targetY = char.y;
-                window.characters.push(char);
             }
+            char.targetX = char.x;
+            char.targetY = char.y;
+            return char;
+        }
+
+        function initDefault() {
+            window.characters = [];
+            DEFAULT_AGENTS.forEach((agentConfig, index) => {
+                window.characters.push(createCharacter(agentConfig, index));
+            });
         }
 
         canvas.addEventListener('click', (e) => {
@@ -1063,7 +1084,7 @@
             if (window.characters && window.characters.length > 0) {
                 window.characters[0].moveTo(x, y);
                 const act = document.getElementById('currentAction');
-                if(act) act.textContent = 'Movimiento manual';
+                if(act) act.textContent = 'Manual movement';
             }
         });
 
@@ -1157,12 +1178,10 @@
         } catch(e) { }
 
         if (window.roomsInfo.length === 0) {
-            window.roomsInfo = [
-                { id: 1, name: 'Sala de reuniones', x: 10, y: 14 },
-                { id: 2, name: 'Escritorio 1', x: 3, y: 5 },
-                { id: 3, name: 'Cafetería', x: 4, y: 4 },
-                { id: 4, name: 'Baño', x: 16, y: 5 }
-            ];
+            window.roomsInfo = DEFAULT_ROOMS.map(r => {
+                const first = walkableTiles(r)[0] || r.tiles[0];
+                return { id: r.id, name: r.name, x: first.x, y: first.y, tiles: r.tiles };
+            });
         }
 
         function renderQuickRooms() {
@@ -1173,8 +1192,8 @@
             window.roomsInfo.forEach(r => {
                 const btn = document.createElement('button');
                 btn.className = "px-2 py-1 bg-gray-700 hover:bg-blue-600 text-[10px] text-white rounded transition-colors border border-gray-600";
-                btn.textContent = "Ir a " + r.name;
-                btn.onclick = () => appendToPrompt(`ve a ${r.name}`);
+                btn.textContent = "Go to " + r.name;
+                btn.onclick = () => appendToPrompt(`go to ${r.name}`);
                 quicks.appendChild(btn);
             });
         }
@@ -1184,7 +1203,7 @@
         function appendToPrompt(text) {
             const input = document.getElementById('aiPromptInput');
             if (input.value) {
-                input.value += ' y ' + text;
+                input.value += ' and ' + text;
             } else {
                 input.value = text;
             }
@@ -1241,7 +1260,7 @@
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition && micBtn) {
             const recognition = new SpeechRecognition();
-            recognition.lang = 'es-ES';
+            recognition.lang = 'en-US';
             recognition.interimResults = false;
             let isRecording = false;
 
@@ -1290,7 +1309,7 @@
             
             if (!command) return;
             
-            addChatMessage('Tú', command, 'user');
+            addChatMessage('You', command, 'user');
             input.value = '';
             
             // Integación Real Gemini API
@@ -1298,11 +1317,11 @@
             
             if (!apiKey) {
                 // Fallback Simulado Original
-                addChatMessage('Sistema', 'API Key de Gemini no configurada. Usando el modo básico...', 'ai');
+                addChatMessage('System', 'Gemini API key not configured. Using basic mode...', 'ai');
                 setTimeout(() => {
                     if (characters.length > 0) {
-                        // Buscar si se mencionó a todos
-                        const isAll = command.toLowerCase().includes('todos');
+                        // Buscar si se mencionó a todos ("all" o el legado "todos")
+                        const isAll = /\b(all|todos)\b/i.test(command);
                         
                         // Buscar la sala
                         let roomDest = null;
@@ -1314,11 +1333,13 @@
                         }
 
                         if (roomDest) {
-                            const charsToMove = isAll ? characters : [characters.find(c => command.toLowerCase().includes(c.name.toLowerCase())) || characters[Math.floor(Math.random() * characters.length)]];
-                            
+                            const lowerCommand = command.toLowerCase();
+                            const charsToMove = isAll ? characters : [characters.find(c => lowerCommand.includes(c.name.toLowerCase()) || lowerCommand.includes(String(c.id).toLowerCase())) || characters[Math.floor(Math.random() * characters.length)]];
+                            const destTiles = walkableTiles(roomDest);
+
                             charsToMove.forEach(c => {
-                                if (roomDest.tiles && roomDest.tiles.length > 0) {
-                                    const rt = roomDest.tiles[Math.floor(Math.random() * roomDest.tiles.length)];
+                                if (destTiles.length > 0) {
+                                    const rt = destTiles[Math.floor(Math.random() * destTiles.length)];
                                     c.moveTo(rt.x * GRID_SIZE + GRID_SIZE / 2, rt.y * GRID_SIZE + GRID_SIZE / 2);
                                 } else {
                                     c.moveTo(roomDest.x * GRID_SIZE + GRID_SIZE / 2, roomDest.y * GRID_SIZE + GRID_SIZE / 2);
@@ -1326,7 +1347,7 @@
                             });
                             addChatMessage('AI Director', 'Ok', 'ai');
                         } else {
-                            addChatMessage('AI Director', 'No te he entendido bien... (Falta sala)', 'ai');
+                            addChatMessage('AI Director', "I didn't quite understand... (no room specified)", 'ai');
                         }
                     }
                 }, 1000);
@@ -1334,7 +1355,7 @@
             }
 
             // Llamada a Gemini 2.5 Flash
-            addChatMessage('AI Director', 'Pensando...', 'ai');
+            addChatMessage('AI Director', 'Thinking...', 'ai');
             
             const charsContext = characters.map(c => c.name).join(', ');
             const roomsContext = window.roomsInfo.map(r => r.name).join(', ');
@@ -1344,7 +1365,7 @@ Recibirás una instrucción de un usuario y debes extraer qué personajes van a 
 Personajes disponibles: [${charsContext}].
 Salas disponibles: [${roomsContext}]. 
 Devuelve ÚNICAMENTE un array en JSON válido con las acciones.
-Si dice "todos" o similar, incluye un elemento de acción individual para cada uno de los personajes disponibles.
+Si dice "todos", "all", "everyone" o similar, incluye un elemento de acción individual para cada uno de los personajes disponibles.
 Si el usuario indica que "esperen", "se queden" o "no salgan", añade la propiedad "esperar": true.
 Si el usuario especifica explícitamente "sentarse" o "en una silla", añade la propiedad "sentarse": true.
 Formato de ejemplo:
@@ -1379,7 +1400,7 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
                 }
 
                 if(!Array.isArray(actions) || actions.length === 0) {
-                     addChatMessage('AI Director', 'No entendí a dónde mandarlos.', 'ai');
+                     addChatMessage('AI Director', "I didn't understand where to send them.", 'ai');
                      return;
                 }
 
@@ -1391,7 +1412,8 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
                 };
 
                 actions.forEach(action => {
-                    const charObj = characters.find(c => c.name.toLowerCase() === action.personaje.toLowerCase());
+                    const who = String(action.personaje || '').toLowerCase();
+                    const charObj = characters.find(c => c.name.toLowerCase() === who || String(c.id).toLowerCase() === who);
                     let roomObj = null;
                     if(action.sala) {
                         roomObj = window.roomsInfo.find(r => r.name.toLowerCase() === action.sala.toLowerCase());
@@ -1400,8 +1422,8 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
                     if(charObj) {
                         charObj.isWaiting = true; // Si recibe orden de Gemini, la cumple y se queda esperando (no vuelve al Idle random)
 
-                        if (roomObj && roomObj.tiles && roomObj.tiles.length > 0) {
-                            let possibleTiles = roomObj.tiles;
+                        if (roomObj && walkableTiles(roomObj).length > 0) {
+                            let possibleTiles = walkableTiles(roomObj);
                             let userRequestedToSit = (action.sentarse || action.sentarse === "true");
                             
                             // Si pide sentarse, priorizamos las sillas (valor 3 en COLLISION_MAP)
@@ -1430,7 +1452,7 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
                                         possibleTiles = [closestChair];
                                     } else {
                                         // Si no hay sillas libres, no se sienta. Buscamos de pie sacando las sillas.
-                                        const floorTiles = roomObj.tiles.filter(t => !COLLISION_MAP[t.y] || COLLISION_MAP[t.y][t.x] !== 3);
+                                        const floorTiles = walkableTiles(roomObj).filter(t => COLLISION_MAP[t.y][t.x] !== 3);
                                         if (floorTiles.length > 0) possibleTiles = floorTiles;
                                     }
                                 }
@@ -1470,17 +1492,17 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
 
                 // Eliminar mensaje de "Pensando..." y poner el Ok
                 const msgs = document.getElementById('chatMessages');
-                if(msgs.lastChild && msgs.lastChild.textContent.includes('Pensando...')) {
+                if(msgs.lastChild && msgs.lastChild.textContent.includes('Thinking...')) {
                     msgs.lastChild.remove();
                 }
-                
-                addChatMessage('AI Director', `Ok. Procesado por Gemini 2.0 Flash para ${actions.length} acciones.`, 'ai');
+
+                addChatMessage('AI Director', `OK. Gemini 2.0 Flash processed ${actions.length} action(s).`, 'ai');
             })
             .catch(err => {
                 console.error(err);
                 const msgs = document.getElementById('chatMessages');
-                if(msgs.lastChild && msgs.lastChild.textContent.includes('Pensando...')) msgs.lastChild.remove();
-                addChatMessage('Sistema', 'Error de conexión con Gemini. Revisa tu API Key.', 'ai');
+                if(msgs.lastChild && msgs.lastChild.textContent.includes('Thinking...')) msgs.lastChild.remove();
+                addChatMessage('System', 'Could not connect to Gemini. Check your API key.', 'ai');
             });
         });
 
@@ -1629,21 +1651,48 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
         const viewLog = document.getElementById('viewLog');
         const logEntries = document.getElementById('logEntries');
 
-        // Filtros de log
-        let logFilters = { 0: true, 1: true, 2: true, 3: true }; // Dustin, Marian y Pep visibles por defecto
+        // Filtros de log (uno por agente, todos visibles por defecto)
+        let logFilters = {};
         let allLogs = []; // Cache de todos los logs
+        let filterButtons = {};
+        let filterStyles = {};
 
-        const filterButtons = {
-            0: document.getElementById('filterDustin'),
-            1: document.getElementById('filterMarian'),
-            2: document.getElementById('filterPep')
-        };
+        function agentColors(char) {
+            return AGENT_COLORS[(char ? char.slot : 0) % AGENT_COLORS.length];
+        }
 
-        const filterStyles = {
-            0: { active: 'rgba(59, 130, 246, 0.1)' },
-            1: { active: 'rgba(249, 115, 22, 0.15)' },
-            2: { active: 'rgba(34, 197, 94, 0.1)' }
-        };
+        function hexToRgba(hex, alpha) {
+            const n = parseInt(hex.slice(1), 16);
+            return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+        }
+
+        function initLogFilters() {
+            const container = document.getElementById('logFilterButtons');
+            if (!container) return;
+            container.innerHTML = '';
+            logFilters = {};
+            filterButtons = {};
+            filterStyles = {};
+
+            characters.forEach(char => {
+                const colors = agentColors(char);
+                const btn = document.createElement('button');
+                btn.style.cssText = 'display: flex; align-items: center; gap: 4px; border: none; cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: all 0.2s;';
+                const swatch = document.createElement('span');
+                swatch.style.cssText = `display: inline-block; width: 12px; height: 12px; background: ${colors.color}; border-radius: 2px;`;
+                const label = document.createElement('span');
+                label.style.color = colors.text;
+                label.textContent = char.name;
+                btn.append(swatch, label);
+                btn.onclick = () => toggleLogFilter(char.id);
+                container.appendChild(btn);
+
+                logFilters[char.id] = true;
+                filterButtons[char.id] = btn;
+                filterStyles[char.id] = { active: hexToRgba(colors.color, 0.1) };
+            });
+            updateFilterButtons();
+        }
 
         function toggleLogFilter(agentId) {
             logFilters[agentId] = !logFilters[agentId];
@@ -1670,8 +1719,8 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
             if (filteredLogs.length === 0) {
                 const activeFilters = Object.values(logFilters).some(Boolean);
                 const noLogsMsg = (!activeFilters) 
-                    ? 'Selecciona al menos un filtro' 
-                    : 'No hay entradas para este filtro';
+                    ? 'Select at least one filter'
+                    : 'No entries for this filter';
                 logEntries.innerHTML = `<div style="color: #6b7280; text-align: center; padding: 20px;">${noLogsMsg}</div>`;
                 return;
             }
@@ -1682,16 +1731,14 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
                 const entry = document.createElement('div');
                 entry.style.cssText = 'display: flex; align-items: flex-start; gap: 8px; padding: 8px; margin-bottom: 8px; background: rgba(31, 41, 55, 0.5); border-left: 2px solid; border-radius: 4px;';
                 
-                const agentMeta = {
-                    0: { name: 'Dustin', color: '#3b82f6', text: '#60a5fa' },
-                    1: { name: 'Marian', color: '#f97316', text: '#fdba74' },
-                    2: { name: 'Pep', color: '#22c55e', text: '#4ade80' },
-                    3: { name: 'Doc', color: '#818cf8', text: '#a5b4fc' }
-                }[log.agent] || { name: `Agente ${log.agent}`, color: '#6b7280', text: '#9ca3af' };
+                const logChar = characters.find(c => String(c.id) === String(log.agent));
+                const agentMeta = logChar
+                    ? { name: logChar.name, ...agentColors(logChar) }
+                    : { name: `Agent ${log.agent}`, color: '#6b7280', text: '#9ca3af' };
                 
                 entry.style.borderLeftColor = agentMeta.color;
                 
-                const msg = log.msg || log.action || 'Sin mensaje';
+                const msg = log.msg || log.action || 'No message';
                 
                 entry.innerHTML = `
                     <span style="color: #6b7280; font-size: 10px; white-space: nowrap;">${log.time}</span>
@@ -1737,7 +1784,7 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
                 allLogs = logs;
                 
                 if (!Object.values(logFilters).some(Boolean)) {
-                    logFilters = { 0: true, 1: true, 2: true };
+                    Object.keys(logFilters).forEach(id => { logFilters[id] = true; });
                     updateFilterButtons();
                 }
                 
@@ -1746,8 +1793,8 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
                 
             } catch (e) {
                 console.error('Error cargando log:', e);
-                const errMsg = (e && e.message) ? e.message : 'Desconocido';
-                logEntries.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 20px;">Error cargando log<br><span style='font-size:11px;color:#9ca3af;'>${errMsg}</span></div>`;
+                const errMsg = (e && e.message) ? e.message : 'Unknown';
+                logEntries.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 20px;">Error loading log<br><span style='font-size:11px;color:#9ca3af;'>${errMsg}</span></div>`;
                 setTimeout(() => {
                     if (!viewLog.classList.contains('hidden')) {
                         refreshLog();
@@ -1757,7 +1804,7 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
         }
 
         function clearLog() {
-            logEntries.innerHTML = '<div class="text-gray-500 text-center py-4">Log limpiado</div>';
+            logEntries.innerHTML = '<div class="text-gray-500 text-center py-4">Log cleared</div>';
         }
 
         // Actualizar log cada 2 segundos si está visible
