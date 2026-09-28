@@ -20,7 +20,7 @@
         .grid-container {
             display: grid;
             grid-template-columns: repeat(36, 16px);
-            grid-template-rows: repeat(25, 16px);
+            grid-template-rows: repeat(31, 16px);
             gap: 1px;
             background: #333;
             border: 2px solid #555;
@@ -154,7 +154,7 @@
                         <p class="text-sm text-slate-400 mb-4" id="mapInstruction">Select a character from the list to place it.</p>
                         
                         <!-- Contenedor del minimapa -->
-                        <div class="relative mx-auto border-2 border-slate-600 rounded overflow-hidden shadow-inner bg-slate-900" style="width: 576px; height: 400px; cursor: crosshair;" onclick="handleMinimapClick(event)" id="minimapWrap">
+                        <div class="relative mx-auto border-2 border-slate-600 rounded overflow-hidden shadow-inner bg-slate-900" style="width: 576px; height: 496px; cursor: crosshair;" onclick="handleMinimapClick(event)" id="minimapWrap">
                             <img id="officePreview" src="assets/oficina-placeholder.png" class="w-full h-full object-cover pixel-art opacity-60" draggable="false" alt="Office layout preview">
                             <div id="markersContainer" class="absolute inset-0 pointer-events-none"></div>
                         </div>
@@ -247,7 +247,7 @@
     <script>
         // CONFIG CONSTANTS  (Using map size from index)
         const COLS = 36;
-        const ROWS = 25;
+        const ROWS = 31; // original office rows 0-24 + Operations Room (rows 24-30)
         const NUM_CHARS = 6;
         const MINIMAP_SCALE = 0.5; // (576/1152)
         const TILE_SIZE = 32;
@@ -286,6 +286,18 @@
         // DATAS
         let charConfig = [];
         let collisionMap = [];
+        // Pad any collision grid to exactly ROWS x COLS with walls (1) so an older/shorter grid
+        // never leaves undefined rows (and saving never truncates the grown map).
+        function padCollision(map) {
+            const src = Array.isArray(map) ? map : [];
+            const out = [];
+            for (let y = 0; y < ROWS; y++) {
+                const row = Array.isArray(src[y]) ? src[y].slice(0, COLS) : [];
+                while (row.length < COLS) row.push(1);
+                out.push(row);
+            }
+            return out;
+        }
         let aiRooms = [];
         
         let selectedCharId = null;
@@ -409,9 +421,9 @@
 
                 // 2. Collision from server
                 if (collisionRes && collisionRes.ok) {
-                    collisionMap = await collisionRes.json();
+                    collisionMap = padCollision(await collisionRes.json());
                 } else {
-                    collisionMap = JSON.parse(JSON.stringify(DEFAULT_COLLISION_MAP));
+                    collisionMap = padCollision(JSON.parse(JSON.stringify(DEFAULT_COLLISION_MAP)));
                 }
 
                 // 3. Rooms from server
@@ -430,7 +442,7 @@
             } catch(e) {
                 console.log('Using defaults:', e);
                 charConfig = generateDefaultChars();
-                collisionMap = JSON.parse(JSON.stringify(DEFAULT_COLLISION_MAP));
+                collisionMap = padCollision(JSON.parse(JSON.stringify(DEFAULT_COLLISION_MAP)));
                 aiRooms = [];
             }
         }
@@ -542,7 +554,7 @@
                             .map((c, i) => ({ ...c, slot: Number.isInteger(c.slot) ? c.slot : i }));
                     }
                     if (config.pixel_office_collision) {
-                        collisionMap = JSON.parse(config.pixel_office_collision);
+                        collisionMap = padCollision(JSON.parse(config.pixel_office_collision));
                     }
                     if (config.pixelOfficeRooms) {
                         aiRooms = JSON.parse(config.pixelOfficeRooms);
@@ -583,7 +595,10 @@
             charConfig.forEach(char => {
                 const isSel = selectedCharId === char.id;
                 // Calculamos background (mismo q miniatura en index)
-                const spriteStyle = `width: 32px; height: 64px; background-image: url('assets/characters/char_${char.slot}.png'); background-position: 0px 0px; background-size: 224px 192px;`;
+                // Same identity rule as the office view: sheet slot % NUM_CHARS, hue-rotated per extra cycle.
+                const sheet = ((char.slot % NUM_CHARS) + NUM_CHARS) % NUM_CHARS;
+                const hue = Math.floor(char.slot / NUM_CHARS) * 150;
+                const spriteStyle = `width: 32px; height: 64px; background-image: url('assets/characters/char_${sheet}.png'); background-position: 0px 0px; background-size: 224px 192px;${hue ? ` filter: hue-rotate(${hue}deg);` : ''}`;
 
                 const el = document.createElement('div');
                 el.className = `flex flex-col gap-2 p-4 rounded-xl transition-all border-2 ${isSel ? 'bg-blue-900/60 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-slate-800/80 border-slate-700 hover:bg-slate-700'}`;

@@ -37,7 +37,8 @@ const AGENT_MAP = [
   { openclaw: 'market_trader', pixel: 'market_trader', slot: 4, name: 'Trader', room: 'Trading Floor' },
   { openclaw: 'crypto_analyst', pixel: 'crypto_analyst', slot: 5, name: 'Crypto', room: 'Crypto Lab' },
   { openclaw: 'memecoin_scout', pixel: 'memecoin_scout', slot: 6, name: 'Memecoin Scout', room: 'Memecoin War Room' },
-  { openclaw: 'sports_analyst', pixel: 'sports_analyst', slot: 7, name: 'Sports Analyst', room: 'Sports Analytics Room' }
+  { openclaw: 'sports_analyst', pixel: 'sports_analyst', slot: 7, name: 'Sports Analyst', room: 'Sports Analytics Room' },
+  { openclaw: 'operations', pixel: 'operations', slot: 8, name: 'Operator', room: 'Operations Room' }
 ];
 const COORDINATOR = 'coordinator';
 const HANGOUT_ROOM = 'Hangout Room'; // idle agents rest here
@@ -458,6 +459,7 @@ const durableEventType = (task) => {
   }
 
   if (task.agentId === 'reviewer') return 'review_completed';
+  if (task.agentId === 'operations') return 'system_report'; // operational reports, never research
   if (task.agentId === 'writer' || task.agentId === 'coordinator') return 'report_completed';
 
   return 'task_completed';

@@ -42,6 +42,32 @@
             pointer-events: none;
         }
         
+        /* Command Center HUD (over the top wall row of the map) */
+        #hud {
+            position: absolute; top: 0; left: 0; right: 0; height: 30px;
+            display: flex; align-items: center; gap: 14px; padding: 0 12px;
+            background: rgba(10, 12, 18, 0.88); border-bottom: 1px solid #c9a227;
+            color: #e5e7eb; font-size: 11px; letter-spacing: 0.04em; z-index: 5;
+        }
+        #hud .stat b { color: #fff; font-size: 13px; margin-left: 4px; }
+        #hud .stat span { color: #9ca3af; text-transform: uppercase; }
+        #hud .sep { flex: 1; }
+        #hud .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; background: #475569; }
+        #hud .dot.ok { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+        #hud .dot.bad { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+        #hud .health { color: #cbd5e1; white-space: nowrap; }
+        #agentCard {
+            position: absolute; z-index: 6; width: 340px; max-height: 520px; overflow-y: auto;
+            background: #111827; border: 1px solid #374151; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            color: #e5e7eb; font-size: 12px;
+        }
+        .task-card { background: #1f2937; border: 1px solid #374151; border-left-width: 3px; border-radius: 6px; padding: 8px; margin-bottom: 6px; }
+        .task-card .t-title { color: #f3f4f6; font-weight: bold; word-break: break-word; }
+        .task-card .t-meta { color: #9ca3af; font-size: 10px; margin-top: 2px; }
+        .task-card details { margin-top: 4px; color: #d1d5db; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
+        .task-section h4 { font-size: 11px; letter-spacing: 0.08em; color: #9ca3af; margin: 10px 0 6px; display: flex; justify-content: space-between; }
+        .pill { display: inline-block; padding: 1px 6px; border-radius: 9999px; font-size: 10px; font-weight: bold; color: #111827; }
+
         /* Fix Log visibility */
         .hidden {
             display: none !important;
@@ -60,10 +86,22 @@
 </head>
 <body>
     <div id="gameContainer">
-        <canvas id="gameCanvas" width="1152" height="800"></canvas>
-        <div id="ui">
-            <div>Time: <span id="timer">0</span>s</div>
+        <canvas id="gameCanvas" width="1152" height="992"></canvas>
+        <div id="hud">
+            <div class="stat"><span>Active agents</span><b id="hudActive">–</b></div>
+            <div class="stat"><span>Queued</span><b id="hudQueued">–</b></div>
+            <div class="stat"><span>Running</span><b id="hudRunning">–</b></div>
+            <div class="stat"><span>Pending approvals</span><b id="hudApprovals">–</b></div>
+            <div class="stat"><span>Completed today</span><b id="hudDone">–</b></div>
+            <div class="stat"><span>Failed</span><b id="hudFailed">–</b></div>
+            <div class="sep"></div>
+            <div class="health" title="OpenClaw Gateway (reported by the sync bridge)"><i class="dot" id="hGateway"></i>Gateway</div>
+            <div class="health" title="Pixel Office server"><i class="dot" id="hPixel"></i>Pixel Office</div>
+            <div class="health" title="OpenClaw -> Pixel Office sync bridge"><i class="dot" id="hBridge"></i>Sync Bridge</div>
+            <div class="health" title="OpenClaw scheduler (automations)"><i class="dot" id="hScheduler"></i>Scheduler</div>
+            <span id="timer" style="display:none">0</span>
         </div>
+        <div id="agentCard" class="hidden"></div>
     </div>
 
     <!-- Panel de control interactivo -->
@@ -78,6 +116,10 @@
             <button id="tabLog" class="flex-1 py-3 text-sm font-bold text-gray-400 hover:text-gray-200 flex items-center justify-center gap-2 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                 Log
+            </button>
+            <button id="tabTasks" class="flex-1 py-3 text-sm font-bold text-gray-400 hover:text-gray-200 flex items-center justify-center gap-2 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                Tasks
             </button>
             <a href="dashboard.html" target="_blank" id="tabDashboard" class="flex-1 py-3 text-sm font-bold text-gray-400 hover:text-gray-200 flex items-center justify-center gap-2 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
@@ -122,6 +164,25 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
                 </form>
+            </div>
+        </div>
+
+        <!-- Task Center -->
+        <div id="viewTasks" class="hidden flex-col flex-1 overflow-hidden">
+            <div class="px-4 pt-3 pb-2 border-b border-gray-700 flex items-center justify-between">
+                <span class="text-xs font-bold tracking-widest text-yellow-500">TASK CENTER</span>
+                <span class="text-[10px] text-gray-500" id="tasksUpdated">OpenClaw task ledger</span>
+            </div>
+            <div class="flex-1 overflow-y-auto px-3 pb-3">
+                <div class="task-section">
+                    <h4>
+                        <span style="color:#38bdf8">● EXTERNAL WORKERS</span>
+                        <span id="workersCount">0</span>
+                    </h4>
+                    <div id="workerCards"></div>
+                    <div class="border-t border-gray-700 my-3"></div>
+                </div>
+                <div id="taskSections"></div>
             </div>
         </div>
 
@@ -187,7 +248,7 @@
 
         const GRID_SIZE = 32;
         const COLS = 36; // 1152/32
-        const ROWS = 25; // 800/32
+        const ROWS = 31; // 992/32: original office rows 0-24 + Operations Room (rows 24-30)
         const MAX_IDLE_FRAMES = 60 * 5; // ~5 segundos a 60fps
         // El live sync (servidor) decide dónde está cada agente: sin paseos aleatorios en reposo
         const IDLE_WANDER = false;
@@ -209,7 +270,8 @@
             { id: 6, name: 'Trading Floor', tiles: rectTiles(25, 2, 34, 6) },
             { id: 7, name: 'Crypto Lab', tiles: rectTiles(25, 8, 34, 12) },
             { id: 8, name: 'Memecoin War Room', tiles: rectTiles(25, 14, 34, 18) },
-            { id: 9, name: 'Sports Analytics Room', tiles: rectTiles(25, 20, 34, 23) }
+            { id: 9, name: 'Sports Analytics Room', tiles: rectTiles(25, 20, 34, 23) },
+            { id: 10, name: 'Operations Room', tiles: rectTiles(1, 25, 34, 29) }
         ];
         const DEFAULT_AGENTS = [
             { id: 'coordinator', name: 'Diktator', role: 'Coordinator', color: 0, room: 'Command Center' },
@@ -219,7 +281,8 @@
             { id: 'market_trader', name: 'Trader', role: 'Market Trader (paper)', color: 4, room: 'Trading Floor' },
             { id: 'crypto_analyst', name: 'Crypto', role: 'Crypto Analyst (paper)', color: 5, room: 'Crypto Lab' },
             { id: 'memecoin_scout', name: 'Memecoin Scout', role: 'Memecoin Scout (research only)', color: 6, room: 'Memecoin War Room' },
-            { id: 'sports_analyst', name: 'Sports Analyst', role: 'Sports Analyst (paper)', color: 7, room: 'Sports Analytics Room' }
+            { id: 'sports_analyst', name: 'Sports Analyst', role: 'Sports Analyst (paper)', color: 7, room: 'Sports Analytics Room' },
+            { id: 'operations', name: 'Operator', role: 'Operations (runtime visibility, read-only)', color: 8, room: 'Operations Room' }
         ];
 
         // Colores del log/filtros por índice de sprite
@@ -231,7 +294,8 @@
             { color: '#ec4899', text: '#f9a8d4' },
             { color: '#eab308', text: '#fde047' },
             { color: '#ef4444', text: '#fca5a5' },
-            { color: '#06b6d4', text: '#67e8f9' }
+            { color: '#06b6d4', text: '#67e8f9' },
+            { color: '#14b8a6', text: '#5eead4' }  // slot 8: Operator
         ];
 
         // Solo tiles pisables (suelo o silla) de una sala
@@ -243,10 +307,25 @@
 
         // Matriz de colisiones (0=Suelo, 1=Pared/Mueble, 2=Puerta, 3=Silla)
         let default_COLLISION_MAP = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,0,1,1,0,1,1,1,1,1,0,0,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,0,1,1],[1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1],[1,0,1,1,0,0,1,1,0,0,0,1,0,0,1,0,0,1,1,0,0,1,0,0,2,0,1,1,0,0,1,1,0,1,1,1],[1,0,3,0,0,0,3,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,3,0,0,0,3,0,0,3,0,1],[1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,1],[1,0,1,1,0,0,1,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1],[1,0,3,0,0,0,3,0,0,0,0,1,0,0,1,1,1,1,1,1,1,1,0,0,1,1,1,0,1,1,0,0,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1],[1,1,1,0,0,0,0,1,1,1,0,1,0,0,1,1,0,3,1,0,1,1,0,0,2,0,0,1,1,0,0,1,1,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,1,0,0,2,0,0,1,1,0,0,2,0,0,1,0,0,3,0,0,0,3,0,0,0,1],[1,0,1,1,0,0,1,1,0,0,0,2,0,0,1,3,0,0,0,0,3,1,0,0,1,1,0,0,0,0,0,0,0,0,1,1],[1,0,0,3,0,0,0,3,0,0,0,1,0,0,1,3,0,1,1,0,3,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1],[1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,0,0,1,1,1,0,0,1,1,1,1,1,1,1,0,0,0,1,1],[1,1,0,0,0,0,0,0,0,0,1,1,0,0,1,1,1,0,0,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1],[1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,2,2,1,1,1,0,0,2,0,0,1,1,1,1,0,0,0,0,1],[1,1,1,0,0,1,1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,0,0,0,1,1],[1,0,0,0,0,0,0,0,0,0,0,1,0,1,1,1,1,2,2,1,1,1,1,0,1,0,0,0,3,3,0,0,0,0,1,1],[1,0,0,1,1,1,1,0,0,0,0,1,0,1,1,1,0,0,0,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1],[1,0,0,1,1,1,1,0,0,0,0,2,0,1,0,3,3,0,0,0,3,0,2,0,1,1,1,1,1,1,1,0,0,1,1,1],[1,0,0,3,0,0,3,0,0,0,0,1,0,2,0,1,1,0,0,3,1,3,1,0,2,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,3,3,0,0,0,3,0,1,0,1,0,0,1,1,0,0,1,1,0,0,1],[1,1,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,1,0,1,0,0,3,0,0,0,3,0,0,0,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]];
+        // Any collision grid (built-in default, browser-saved, or from the server) is padded to
+        // exactly ROWS x COLS with walls (1). An older/shorter grid (e.g. a server that has not
+        // been restarted since the map grew) therefore makes the new rows unwalkable instead of
+        // leaving undefined rows that would crash pathfinding.
+        function padCollision(map) {
+            const src = Array.isArray(map) ? map : [];
+            const out = [];
+            for (let y = 0; y < ROWS; y++) {
+                const row = Array.isArray(src[y]) ? src[y].slice(0, COLS) : [];
+                while (row.length < COLS) row.push(1);
+                out.push(row);
+            }
+            return out;
+        }
+        default_COLLISION_MAP = padCollision(default_COLLISION_MAP);
         let COLLISION_MAP = default_COLLISION_MAP;
         try {
             const savedMap = localStorage.getItem('pixel_office_collision');
-            if (savedMap) COLLISION_MAP = JSON.parse(savedMap);
+            if (savedMap) COLLISION_MAP = padCollision(JSON.parse(savedMap));
         } catch(e) {}
 
         // Estado de las puertas: { "x,y": true/false (true = abierta) }
@@ -496,7 +575,7 @@
                 
                 // Aspecto aleatorio basado en el ID
                 this.outfitIndex = this.slot % 6 + 1; // Outfit1 a Outfit6
-                this.hairIndex = this.slot % 8; // 0 a 7
+                this.hairIndex = this.slot; // unique per agent slot (legacy field, not used for drawing)
             }
 
             update() {
@@ -1033,7 +1112,7 @@
                     const collisionResponse = await fetch('/api/collision');
                     const collisionData = await collisionResponse.json();
                     if (collisionData && Array.isArray(collisionData)) {
-                        COLLISION_MAP = collisionData;
+                        COLLISION_MAP = padCollision(collisionData);
                         console.log('Collision map loaded from server');
                     }
                 } catch(e) {
@@ -1132,8 +1211,11 @@
             const y = (e.clientY - rect.top);
             if (!simulationStarted) return;
             
-            // Las posiciones las controla el live sync (servidor); el clic ya no mueve agentes
-            void x; void y;
+            // Las posiciones las controla el live sync (servidor); el clic abre la ficha del agente
+            const sx = x * (canvas.width / rect.width), sy = y * (canvas.height / rect.height);
+            const hit = agentAt(sx, sy);
+            if (hit) openAgentCard(hit); else closeAgentCard();
+            return;
         });
 
         loadConfig();
@@ -1748,6 +1830,302 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
         loadAgentMessages();
         loadAgentCommands();
 
+        // === COMMAND CENTER: Task Center, HUD y ficha de agente (datos del ledger de OpenClaw) ===
+        const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const TASK_GROUPS = [
+            { key: 'queued', label: 'QUEUED', color: '#94a3b8', match: t => t.status === 'queued' },
+            { key: 'running', label: 'RUNNING', color: '#3b82f6', match: t => t.status === 'running' },
+            { key: 'approval', label: 'WAITING APPROVAL', color: '#a855f7', match: t => t.status === 'waiting_approval' },
+            { key: 'completed', label: 'COMPLETED', color: '#22c55e', match: t => t.status === 'completed' },
+            { key: 'failed', label: 'FAILED', color: '#ef4444', match: t => ['failed', 'timed_out', 'cancelled', 'lost'].includes(t.status) }
+        ];
+        let taskFeedCache = { tasks: [], updatedAt: 0 };
+        let workerFeedCache = { workers: [], updatedAt: 0, staleAfterMs: 0 };
+
+        const WORKER_COLORS = {
+            'IDLE': '#94a3b8',
+            'OFF': '#64748b',
+            'RUNNING': '#3b82f6',
+            'PROOFREADING': '#8b5cf6',
+            'PROMPT_READY': '#06b6d4',
+            'WAITING_LIMIT': '#f59e0b',
+            'WAITING_APPROVAL': '#a855f7',
+            'COMPLETED': '#22c55e',
+            'WATCHING': '#14b8a6',
+            'SEAT_FOUND': '#22c55e',
+            'ALERTING': '#f97316',
+            'ERROR': '#ef4444',
+            'OFFLINE': '#475569'
+        };
+
+        function workerCardHtml(w) {
+            const status = w.status || 'OFFLINE';
+            const color = WORKER_COLORS[status] || '#94a3b8';
+
+            let progress = '';
+            if (w.progress && Number.isFinite(w.progress.current) && Number.isFinite(w.progress.target) && w.progress.target > 0) {
+                const pct = Math.max(0, Math.min(100, (w.progress.current / w.progress.target) * 100));
+                const label =
+                    Number(w.progress.current).toLocaleString() + ' / ' +
+                    Number(w.progress.target).toLocaleString() +
+                    (w.progress.unit ? ' ' + esc(w.progress.unit) : '');
+
+                progress =
+                    '<div style="margin-top:7px">' +
+                        '<div style="display:flex;justify-content:space-between;font-size:10px;color:#9ca3af">' +
+                            '<span>' + label + '</span>' +
+                            '<span>' + pct.toFixed(1) + '%</span>' +
+                        '</div>' +
+                        '<div style="height:6px;background:#111827;border-radius:3px;overflow:hidden;margin-top:3px">' +
+                            '<div style="height:100%;width:' + pct + '%;background:' + color + '"></div>' +
+                        '</div>' +
+                    '</div>';
+            }
+
+            const meta = [];
+            if (w.phase) meta.push(esc(w.phase));
+            if (w.qa) meta.push('QA: ' + esc(w.qa));
+            if (w.lastCheckAt) meta.push('last check ' + fmtTime(w.lastCheckAt));
+            if (w.nextCheckAt) meta.push('next check ' + fmtTime(w.nextCheckAt));
+            if (w.lastSeenAt) meta.push('seen ' + fmtTime(w.lastSeenAt));
+
+            return '<div class="task-card" style="border-left-color:' + color + '">' +
+                '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">' +
+                    '<div class="t-title">' + esc(w.name || w.id || 'worker') + '</div>' +
+                    '<span class="pill" style="background:' + color + ';font-size:9px">' + esc(status) + '</span>' +
+                '</div>' +
+                (w.message ? '<div style="font-size:11px;color:#d1d5db;margin-top:5px">' + esc(w.message) + '</div>' : '') +
+                progress +
+                (meta.length ? '<div class="t-meta">' + meta.join(' · ') + '</div>' : '') +
+                workerControlsHtml(w) +
+                '<div class="t-meta">id ' + esc(w.id || '') + '</div>' +
+            '</div>';
+        }
+
+        async function postWorkerControl(id, payload) {
+            try {
+                const r = await fetch('/api/workers/' + encodeURIComponent(id) + '/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!r.ok) {
+                    const text = await r.text();
+                    throw new Error(text || ('HTTP ' + r.status));
+                }
+
+                await refreshCommandCenter();
+            } catch (e) {
+                console.error('Worker control failed:', e);
+                alert('Worker control failed: ' + e.message);
+            }
+        }
+
+        function workerControlsHtml(w) {
+            const enabled = !(w.control && w.control.enabled === false);
+            const pending = w.control && w.control.pendingAction
+                ? w.control.pendingAction.action
+                : null;
+
+            const button = (label, onclick, color) =>
+                '<button onclick="' + onclick + '" ' +
+                'style="background:' + color + ';color:white;border:0;border-radius:4px;' +
+                'padding:5px 8px;font-size:9px;font-weight:bold;cursor:pointer">' +
+                esc(label) + '</button>';
+
+            let html = '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">';
+
+            if (w.id === 'aalto_seat_watcher') {
+                html += enabled
+                    ? button(
+                        'TURN OFF',
+                        "postWorkerControl('aalto_seat_watcher',{enabled:false})",
+                        '#475569'
+                      )
+                    : button(
+                        'TURN ON',
+                        "postWorkerControl('aalto_seat_watcher',{enabled:true})",
+                        '#16a34a'
+                      );
+
+                html += button(
+                    'TEST POLL',
+                    "postWorkerControl('aalto_seat_watcher',{action:'test_poll'})",
+                    '#2563eb'
+                );
+
+                html += button(
+                    'TEST ALERT',
+                    "postWorkerControl('aalto_seat_watcher',{action:'test_alert'})",
+                    '#ea580c'
+                );
+            }
+
+            if (w.id === 'startag_50k') {
+                html += enabled
+                    ? button(
+                        'PAUSE',
+                        "postWorkerControl('startag_50k',{enabled:false,action:'pause'})",
+                        '#475569'
+                      )
+                    : button(
+                        'RUN / RESUME',
+                        "postWorkerControl('startag_50k',{enabled:true,action:'resume'})",
+                        '#16a34a'
+                      );
+
+                html += button(
+                    'TEST WORKER',
+                    "postWorkerControl('startag_50k',{action:'test_worker'})",
+                    '#2563eb'
+                );
+
+                html += button(
+                    'TEST PROOFREADER',
+                    "postWorkerControl('startag_50k',{action:'test_proofreader'})",
+                    '#7c3aed'
+                );
+
+                html += button(
+                    'TEST CODEX HANDOFF',
+                    "postWorkerControl('startag_50k',{action:'test_codex_handoff'})",
+                    '#0891b2'
+                );
+            }
+
+            html += '</div>';
+
+            if (pending) {
+                html += '<div class="t-meta" style="color:#f59e0b;margin-top:5px">' +
+                    'pending command: ' + esc(pending) +
+                    '</div>';
+            }
+
+            return html;
+        }
+
+        function renderWorkers() {
+            const el = document.getElementById('workerCards');
+            if (!el) return;
+
+            const workers = workerFeedCache.workers || [];
+            el.innerHTML = workers.length
+                ? workers.map(workerCardHtml).join('')
+                : '<div class="text-[11px] text-gray-600 mb-2">no external workers</div>';
+
+            const count = document.getElementById('workersCount');
+            if (count) count.textContent = workers.length;
+        }
+
+        const agentName = (id) => { const c = (window.characters || []).find(x => x.id === id); return c ? c.name : (id || 'unknown'); };
+        const fmtTime = (ms) => ms ? new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '–';
+        const fmtDur = (a, b) => { if (!a || !b || b < a) return ''; const s = Math.round((b - a) / 1000); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + (s % 60) + 's'; };
+        function taskCardHtml(t, color) {
+            const body = t.error ? 'Error: ' + t.error : (t.summary || '');
+            return '<div class="task-card" style="border-left-color:' + color + '">' +
+                '<div class="t-title">' + esc(t.title || '(untitled task)') + '</div>' +
+                '<div class="t-meta">' + esc(agentName(t.agentId)) + ' · ' + esc(t.kind || 'task') +
+                ' · created ' + fmtTime(t.createdAt) + (t.startedAt ? ' · started ' + fmtTime(t.startedAt) : '') +
+                (t.endedAt ? ' · done ' + fmtTime(t.endedAt) + ' (' + fmtDur(t.startedAt || t.createdAt, t.endedAt) + ')' : '') +
+                (t.toolUseCount ? ' · ' + t.toolUseCount + ' tool uses' : '') + '</div>' +
+                (body ? '<details><summary class="cursor-pointer text-gray-400">' + (t.error ? 'error' : 'result') + '</summary>' + esc(body) + '</details>' : '') +
+                '<div class="t-meta">id ' + esc(String(t.id).slice(0, 8)) + '</div></div>';
+        }
+        function renderTaskCenter() {
+            const el = document.getElementById('taskSections');
+            if (!el) return;
+            const tasks = taskFeedCache.tasks || [];
+            el.innerHTML = TASK_GROUPS.map(g => {
+                const list = tasks.filter(g.match);
+                const shown = g.key === 'completed' || g.key === 'failed' ? list.slice(0, 15) : list;
+                return '<div class="task-section"><h4><span style="color:' + g.color + '">● ' + g.label + '</span><span>' + list.length + '</span></h4>' +
+                    (shown.length ? shown.map(t => taskCardHtml(t, g.color)).join('') : '<div class="text-[11px] text-gray-600 mb-2">none</div>') + '</div>';
+            }).join('');
+            const upd = document.getElementById('tasksUpdated');
+            if (upd) upd.textContent = taskFeedCache.updatedAt ? 'ledger synced ' + fmtTime(taskFeedCache.updatedAt) : 'waiting for sync bridge';
+        }
+        function renderHud() {
+            const tasks = taskFeedCache.tasks || [];
+            const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+            const chars = window.characters || [];
+            set('hudActive', chars.filter(c => !['IDLE', 'OFFLINE'].includes(effectiveStatus(c))).length);
+            set('hudQueued', tasks.filter(t => t.status === 'queued').length);
+            set('hudRunning', tasks.filter(t => t.status === 'running').length);
+            set('hudApprovals', tasks.filter(t => t.status === 'waiting_approval').length);
+            set('hudDone', tasks.filter(t => t.status === 'completed' && (t.endedAt || 0) >= midnight.getTime()).length);
+            set('hudFailed', tasks.filter(t => ['failed', 'timed_out'].includes(t.status) && (t.endedAt || 0) >= midnight.getTime()).length);
+            const h = systemHealth;
+            const dot = (id, ok) => { const e = document.getElementById(id); if (e) e.className = 'dot ' + (ok === true ? 'ok' : ok === false ? 'bad' : ''); };
+            dot('hPixel', h ? true : false);
+            dot('hBridge', h ? h.bridge.ok : undefined);
+            dot('hGateway', h ? h.gateway.ok : undefined);
+            dot('hScheduler', h ? !!(h.scheduler && h.scheduler.ok) : undefined);
+        }
+        async function refreshCommandCenter() {
+            try { taskFeedCache = await (await fetch('/api/tasks')).json(); } catch (e) {}
+            try { workerFeedCache = await (await fetch('/api/workers')).json(); } catch (e) {}
+
+            renderWorkers();
+            renderTaskCenter();
+            renderHud();
+
+            if (openCardAgentId) renderAgentCard(openCardAgentId);
+        }
+        setInterval(refreshCommandCenter, 5000);
+        refreshCommandCenter();
+
+        // Ficha de agente (clic sobre un personaje del mapa)
+        let openCardAgentId = null;
+        function renderAgentCard(id) {
+            const card = document.getElementById('agentCard');
+            const char = (window.characters || []).find(c => c.id === id);
+            if (!card || !char) return;
+            const status = effectiveStatus(char);
+            const color = STATUS_COLORS[status] || STATUS_COLORS.IDLE;
+            const mine = (taskFeedCache.tasks || []).filter(t => t.agentId === id);
+            const lastActivity = Math.max(char.statusSince || 0, ...mine.map(t => t.endedAt || t.startedAt || t.createdAt || 0));
+            const errors = mine.filter(t => t.error).slice(0, 3);
+            const outputs = mine.filter(t => t.summary && t.status === 'completed').slice(0, 3);
+            card.innerHTML =
+                '<div class="flex items-center justify-between px-3 py-2 border-b border-gray-700">' +
+                    '<div><div class="text-sm font-bold text-white">' + esc(char.name) + '</div>' +
+                    '<div class="text-[10px] text-gray-500">' + esc(char.role || '') + ' · id ' + esc(char.id) + '</div></div>' +
+                    '<button id="agentCardClose" class="text-gray-400 hover:text-white text-lg leading-none">×</button></div>' +
+                '<div class="px-3 py-2 space-y-2">' +
+                    '<div><span class="pill" style="background:' + color + '">' + esc(status) + '</span>' +
+                    '<span class="text-[10px] text-gray-500 ml-2">last activity ' + (lastActivity ? fmtTime(lastActivity) : '–') + '</span></div>' +
+                    '<div><div class="text-[10px] text-gray-500 uppercase">Current task</div><div class="text-gray-200">' + (char.task ? esc(char.task) : '<span class="text-gray-600">none</span>') + '</div></div>' +
+                    '<div><div class="text-[10px] text-gray-500 uppercase mb-1">Recent tasks</div>' +
+                        (mine.length ? mine.slice(0, 5).map(t => taskCardHtml(t, (TASK_GROUPS.find(g => g.match(t)) || TASK_GROUPS[0]).color)).join('') : '<div class="text-gray-600">none yet</div>') + '</div>' +
+                    '<div><div class="text-[10px] text-gray-500 uppercase mb-1">Recent outputs</div>' +
+                        (outputs.length ? outputs.map(t => '<div class="text-[11px] text-gray-300 mb-1">• ' + esc((t.summary || '').slice(0, 220)) + '</div>').join('') : '<div class="text-gray-600">none</div>') + '</div>' +
+                    '<div><div class="text-[10px] text-gray-500 uppercase mb-1">Errors</div>' +
+                        (errors.length ? errors.map(t => '<div class="text-[11px] text-red-300 mb-1">• ' + esc(t.error) + '</div>').join('') : '<div class="text-gray-600">none</div>') + '</div>' +
+                '</div>';
+            document.getElementById('agentCardClose').onclick = closeAgentCard;
+        }
+        function openAgentCard(char) {
+            const card = document.getElementById('agentCard');
+            openCardAgentId = char.id;
+            renderAgentCard(char.id);
+            card.classList.remove('hidden');
+            const left = Math.min(Math.max(char.x + 24, 8), canvas.width - 348);
+            const top = Math.min(Math.max(char.y - 120, 36), canvas.height - 530);
+            card.style.left = left + 'px';
+            card.style.top = top + 'px';
+        }
+        function closeAgentCard() {
+            openCardAgentId = null;
+            document.getElementById('agentCard').classList.add('hidden');
+        }
+        function agentAt(px, py) {
+            // Zona clicable: el sprite (32x64 por encima de los pies) y su etiqueta
+            return [...(window.characters || [])].sort((a, b) => b.y - a.y)
+                .find(c => Math.abs(px - c.x) <= 18 && py <= c.y + 6 && py >= c.y - 80);
+        }
+
         // === SISTEMA DE LOG ===
         const tabChat = document.getElementById('tabChat');
         const tabLog = document.getElementById('tabLog');
@@ -1859,24 +2237,24 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
         }
 
         // Cambiar entre pestañas
-        tabChat.addEventListener('click', () => {
-            tabChat.classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
-            tabChat.classList.remove('text-gray-400');
-            tabLog.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
-            tabLog.classList.add('text-gray-400');
-            viewChat.classList.remove('hidden');
-            viewLog.classList.add('hidden');
-        });
-
-        tabLog.addEventListener('click', () => {
-            tabLog.classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
-            tabLog.classList.remove('text-gray-400');
-            tabChat.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
-            tabChat.classList.add('text-gray-400');
-            viewChat.classList.add('hidden');
-            viewLog.classList.remove('hidden');
-            refreshLog();
-        });
+        const PANEL_TABS = [
+            { tab: tabChat, view: viewChat },
+            { tab: tabLog, view: viewLog, onShow: () => refreshLog() },
+            { tab: document.getElementById('tabTasks'), view: document.getElementById('viewTasks'), flex: true, onShow: () => refreshCommandCenter() }
+        ];
+        function showPanelTab(active) {
+            PANEL_TABS.forEach(p => {
+                const on = p === active;
+                p.tab.classList.toggle('text-blue-400', on);
+                p.tab.classList.toggle('border-b-2', on);
+                p.tab.classList.toggle('border-blue-400', on);
+                p.tab.classList.toggle('text-gray-400', !on);
+                p.view.classList.toggle('hidden', !on);
+                if (p.flex) p.view.classList.toggle('flex', on);
+            });
+            if (active.onShow) active.onShow();
+        }
+        PANEL_TABS.forEach(p => p.tab.addEventListener('click', () => showPanelTab(p)));
 
         // Cargar log desde API (formato consistente)
         async function refreshLog() {
@@ -1923,5 +2301,7 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
         // Iniciar
         gameLoop();
     </script>
+    <!-- Oval Office "Nuclear Option": Business OS global kill switch (see nuclear-option.js / killswitch-bridge.js) -->
+    <script src="nuclear-option.js"></script>
 </body>
 </html>

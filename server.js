@@ -95,7 +95,34 @@ const app = express();
 const PORT = parseInt(process.env.PORT, 10) || 19000;
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
+// Static files: explicit allowlist only. The repository directory itself is never
+// served, so backups (*.bak*), .env, data/, test/, server-side modules and runtime
+// state cannot be fetched. Asset names are restricted to [A-Za-z0-9_-] and the final
+// extension must be .png/.json, so "x.png.bak-..." or "../" never match.
+const PUBLIC_ROOT_FILES = new Map([
+  ['/', 'index.html'],
+  ['/index.html', 'index.html'],
+  ['/dashboard.html', 'dashboard.html'],
+  ['/nuclear-option.js', 'nuclear-option.js']
+]);
+const PUBLIC_ASSET = /^\/assets\/(?:characters\/)?[A-Za-z0-9_-]+\.(?:png|json)$/;
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  const rootFile = PUBLIC_ROOT_FILES.get(req.path);
+  if (rootFile) return res.sendFile(path.join(__dirname, rootFile));
+  if (PUBLIC_ASSET.test(req.path)) {
+    return res.sendFile(path.join(__dirname, req.path.slice(1)), (err) => {
+      if (err && !res.headersSent) res.status(404).end();
+    });
+  }
+  if (req.path.startsWith('/api/')) return next();
+  // Refused outright (no index.html fallback): dotfiles/dot-directories (.env, .git),
+  // server-side directories, encoded paths, and any other file-like path.
+  if (/(^|\/)\./.test(req.path)) return res.status(404).end();
+  if (/^\/(data|test|tools|node_modules|systemd|docs|assets)(\/|$)/.test(req.path)) return res.status(404).end();
+  if (path.extname(req.path) || req.path.includes('%')) return res.status(404).end();
+  return next();
+});
 
 // Equipo OpenClaw: los ids internos deben coincidir exactamente con los de OpenClaw.
 // `color` es el índice del sprite (assets/characters/char_N.png).
@@ -127,7 +154,8 @@ const DEFAULT_ROOMS = Array.isArray(OFFICE_LAYOUT.rooms) && OFFICE_LAYOUT.rooms.
   { id: 6, name: 'Trading Floor', color: '#22c55e', tiles: rectTiles(25, 2, 34, 6) },
   { id: 7, name: 'Crypto Lab', color: '#f7931a', tiles: rectTiles(25, 8, 34, 12) },
   { id: 8, name: 'Memecoin War Room', color: '#ef4444', tiles: rectTiles(25, 14, 34, 18) },
-  { id: 9, name: 'Sports Analytics Room', color: '#06b6d4', tiles: rectTiles(25, 20, 34, 23) }
+  { id: 9, name: 'Sports Analytics Room', color: '#06b6d4', tiles: rectTiles(25, 20, 34, 23) },
+  { id: 10, name: 'Operations Room', color: '#14b8a6', tiles: rectTiles(1, 25, 34, 29) }
 ];
 
 const DEFAULT_AGENTS = [
@@ -138,7 +166,8 @@ const DEFAULT_AGENTS = [
   { id: 'market_trader', name: 'Trader', role: 'Market Trader (paper)', color: 4, x: spawnX('market_trader', 20), y: spawnY('market_trader', 20), room: 'Trading Floor' },
   { id: 'crypto_analyst', name: 'Crypto', role: 'Crypto Analyst (paper)', color: 5, x: spawnX('crypto_analyst', 19), y: spawnY('crypto_analyst', 21), room: 'Crypto Lab' },
   { id: 'memecoin_scout', name: 'Memecoin Scout', role: 'Memecoin Scout (research only)', color: 6, x: spawnX('memecoin_scout', 21), y: spawnY('memecoin_scout', 21), room: 'Memecoin War Room' },
-  { id: 'sports_analyst', name: 'Sports Analyst', role: 'Sports Analyst (paper)', color: 7, x: spawnX('sports_analyst', 20), y: spawnY('sports_analyst', 22), room: 'Sports Analytics Room' }
+  { id: 'sports_analyst', name: 'Sports Analyst', role: 'Sports Analyst (paper)', color: 7, x: spawnX('sports_analyst', 20), y: spawnY('sports_analyst', 22), room: 'Sports Analytics Room' },
+  { id: 'operations', name: 'Operator', role: 'Operations (runtime visibility, read-only)', color: 8, x: spawnX('operations', 18), y: spawnY('operations', 22), room: 'Operations Room' }
 ].map(a => ({ ...a, personality: 'Trabajador', state: 'idle', active: true }));
 
 // Salas del demo original (sin tiles); si el mapa guardado solo contiene estas, se reemplaza
@@ -218,6 +247,30 @@ try {
 }
 
 const initialMapData = loadMapData() || {};
+
+// A persisted collision grid whose dimensions differ from the generated office layout
+// belongs to an older map (e.g. before the Operations Room was added). It is backed up
+// once and replaced, together with the rooms, by the generated layout so the served
+// collision, rooms, targets and art never drift apart. Same-size persisted grids
+// (user edits in the dashboard) are kept.
+const gridSize = (g) => (Array.isArray(g) && g.length && Array.isArray(g[0]) ? `${g[0].length}x${g.length}` : null);
+// Also stale: a same-size grid in which a generated room is entirely walls although the
+// generated layout makes it walkable (e.g. an old grid padded with walls and re-saved
+// by the dashboard before the server restart). Real user edits never wall off a whole room.
+const walledOffRoom = (g) => DEFAULT_COLLISION && Array.isArray(OFFICE_LAYOUT.rooms) && OFFICE_LAYOUT.rooms.some(r =>
+  Array.isArray(r.tiles) && r.tiles.length &&
+  r.tiles.some(t => DEFAULT_COLLISION[t.y] && DEFAULT_COLLISION[t.y][t.x] !== 1) &&
+  r.tiles.every(t => !(g[t.y]) || g[t.y][t.x] === 1)
+);
+if (DEFAULT_COLLISION && initialMapData.collision && (gridSize(initialMapData.collision) !== gridSize(DEFAULT_COLLISION) || walledOffRoom(initialMapData.collision))) {
+  backupOnce(MAP_PATH, 'pre-layout-resize-backup');
+  backupOnce(COLLISION_PATH, 'pre-layout-resize-backup');
+  backupOnce(ROOMS_PATH, 'pre-layout-resize-backup');
+  console.log(`Persisted map ${gridSize(initialMapData.collision)} is older than the generated layout ${gridSize(DEFAULT_COLLISION)}: using the generated layout`);
+  initialMapData.collision = clone(DEFAULT_COLLISION);
+  initialMapData.rooms = clone(DEFAULT_ROOMS);
+  persistMapData({ collision: initialMapData.collision, rooms: initialMapData.rooms });
+}
 if (Array.isArray(initialMapData.rooms) && initialMapData.rooms.length) {
   config.rooms = initialMapData.rooms;
 }
@@ -362,6 +415,235 @@ app.get('/api/tasks', (req, res) => {
   if (req.query.status) tasks = tasks.filter(t => t.status === String(req.query.status));
   res.json({ updatedAt: taskFeed.updatedAt, tasks });
 });
+
+// ---------------------------------------------------------------------------
+// External workers (Windows/local services -> Pixel Office)
+//
+// Runtime status only. Never send credentials, tokens, prompts containing
+// secrets, or other sensitive material through this endpoint.
+
+const WORKERS_PATH = dataPath('workers.json');
+const SAFE_WORKER_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const WORKER_STALE_MS = 5 * 60 * 1000;
+
+const WORKER_STATUSES = [
+  'IDLE',
+  'OFF',
+  'RUNNING',
+  'PROOFREADING',
+  'PROMPT_READY',
+  'WAITING_LIMIT',
+  'WAITING_APPROVAL',
+  'COMPLETED',
+  'WATCHING',
+  'SEAT_FOUND',
+  'ALERTING',
+  'ERROR',
+  'OFFLINE'
+];
+
+let workerFeed = readJSONFile(WORKERS_PATH) || { updatedAt: 0, workers: {} };
+if (!workerFeed.workers || typeof workerFeed.workers !== 'object' || Array.isArray(workerFeed.workers)) {
+  workerFeed = { updatedAt: 0, workers: {} };
+}
+
+const workerKey = (raw) => {
+  const value = String(raw || '');
+  return SAFE_WORKER_ID.test(value) ? value : null;
+};
+
+const boundedInt = (v, min, max) => {
+  if (!Number.isFinite(v)) return undefined;
+  return Math.max(min, Math.min(max, Math.trunc(v)));
+};
+
+const sanitiseWorkerPayload = (id, body, previous = {}) => {
+  const now = Date.now();
+  const status = WORKER_STATUSES.includes(body.status) ? body.status : (previous.status || 'IDLE');
+
+  const progress = body.progress && typeof body.progress === 'object' ? {
+    current: boundedInt(body.progress.current, 0, 1000000000),
+    target: boundedInt(body.progress.target, 0, 1000000000),
+    unit: clip(body.progress.unit, 24)
+  } : (previous.progress || null);
+
+  return {
+    id,
+    name: clip(body.name, 80) || previous.name || id,
+    status,
+    phase: clip(body.phase, 100) || '',
+    message: clip(body.message, 240) || '',
+    progress,
+    lastCheckAt: num(body.lastCheckAt),
+    nextCheckAt: num(body.nextCheckAt),
+    qa: clip(body.qa, 80),
+    source: clip(body.source, 40) || previous.source || '',
+    lastSeenAt: now,
+    updatedAt: now
+  };
+};
+
+const effectiveWorker = (worker, now = Date.now()) => {
+  if (!worker) return null;
+
+  const enabled = !(worker.control && worker.control.enabled === false);
+  const stale = !worker.lastSeenAt || now - worker.lastSeenAt > WORKER_STALE_MS;
+
+  return {
+    ...worker,
+    status: !enabled ? 'OFF' : (stale ? 'OFFLINE' : worker.status),
+    stale: enabled ? stale : false,
+    enabled
+  };
+};
+
+app.post('/api/workers/:id/status', (req, res) => {
+  const id = workerKey(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid worker id' });
+
+  const previous = workerFeed.workers[id] || {};
+  const worker = sanitiseWorkerPayload(id, req.body || {}, previous);
+
+  // Status heartbeats must never erase Pixel Office control state.
+  if (previous.control && typeof previous.control === 'object') {
+    worker.control = previous.control;
+  }
+
+  workerFeed.workers[id] = worker;
+  workerFeed.updatedAt = Date.now();
+  writeJSONFile(WORKERS_PATH, workerFeed);
+
+  res.json({ success: true, worker: effectiveWorker(worker) });
+});
+
+app.get('/api/workers', (req, res) => {
+  const now = Date.now();
+  const workers = Object.values(workerFeed.workers)
+    .map(w => effectiveWorker(w, now))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+  res.json({
+    updatedAt: workerFeed.updatedAt,
+    staleAfterMs: WORKER_STALE_MS,
+    workers
+  });
+});
+
+app.get('/api/workers/:id', (req, res) => {
+  const id = workerKey(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid worker id' });
+
+  const worker = workerFeed.workers[id];
+  if (!worker) return res.status(404).json({ error: 'Worker not found' });
+
+  res.json(effectiveWorker(worker));
+});
+
+// ---------------------------------------------------------------------------
+// External worker controls
+//
+// Pixel Office writes desired state/actions here.
+// The real Windows worker/supervisor polls this endpoint and applies them.
+
+const WORKER_ACTIONS = new Set([
+  'test',
+  'test_alert',
+  'test_poll',
+  'test_worker',
+  'test_proofreader',
+  'test_codex_handoff',
+  'run',
+  'pause',
+  'resume'
+]);
+
+app.get('/api/workers/:id/control', (req, res) => {
+  const id = workerKey(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid worker id' });
+
+  const worker = workerFeed.workers[id];
+  if (!worker) return res.status(404).json({ error: 'Worker not found' });
+
+  res.json(worker.control || {
+    enabled: true,
+    pendingAction: null,
+    updatedAt: 0
+  });
+});
+
+app.post('/api/workers/:id/control', (req, res) => {
+  const id = workerKey(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid worker id' });
+
+  const worker = workerFeed.workers[id];
+  if (!worker) return res.status(404).json({ error: 'Worker not found' });
+
+  const body = req.body || {};
+  const previous = worker.control || {
+    enabled: true,
+    pendingAction: null,
+    updatedAt: 0
+  };
+
+  let enabled = previous.enabled !== false;
+  if (typeof body.enabled === 'boolean') enabled = body.enabled;
+
+  let pendingAction = previous.pendingAction || null;
+  if (body.action !== undefined) {
+    if (body.action === null || body.action === '') {
+      pendingAction = null;
+    } else if (WORKER_ACTIONS.has(body.action)) {
+      pendingAction = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        action: body.action,
+        createdAt: Date.now()
+      };
+    } else {
+      return res.status(400).json({ error: 'Invalid worker action' });
+    }
+  }
+
+  worker.control = {
+    enabled,
+    pendingAction,
+    updatedAt: Date.now()
+  };
+
+  workerFeed.updatedAt = Date.now();
+  writeJSONFile(WORKERS_PATH, workerFeed);
+
+  res.json({
+    success: true,
+    control: worker.control
+  });
+});
+
+// Worker acknowledges a one-shot action after executing it.
+app.post('/api/workers/:id/control/ack', (req, res) => {
+  const id = workerKey(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid worker id' });
+
+  const worker = workerFeed.workers[id];
+  if (!worker) return res.status(404).json({ error: 'Worker not found' });
+
+  const actionId = clip(req.body && req.body.actionId, 80);
+  const current = worker.control && worker.control.pendingAction;
+
+  if (current && actionId && current.id === actionId) {
+    worker.control.pendingAction = null;
+    worker.control.updatedAt = Date.now();
+    workerFeed.updatedAt = Date.now();
+    writeJSONFile(WORKERS_PATH, workerFeed);
+  }
+
+  res.json({ success: true });
+});
+
+// ---------------------------------------------------------------------------
+// Business OS GLOBAL kill switch (Oval Office "Nuclear Option").
+// Pixel Office only invokes the existing Business OS CLI with fixed arguments;
+// see killswitch-bridge.js. Registered before the index.html catch-all.
+require('./killswitch-bridge').createKillSwitchBridge().register(app);
 
 // Health: Pixel Office itself, plus what the bridge last reported (no secrets)
 const startedAt = Date.now();

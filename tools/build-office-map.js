@@ -36,6 +36,7 @@ const zlib = require('zlib');
 //                 M TV   A arcade   C coffee bar
 //   Markets:      Y wall screen   Z trading desk   Q crypto rig   H war table   J scoreboard
 //   Grand Hall:   G strategy map table
+//   Operations:   V status video wall   R server rack   N NOC console
 //
 // Each row = left rooms (x1-10) | wall x11 | centre (x12-23) | wall x24 | right rooms (x25-34).
 const ROW_PARTS = [
@@ -61,20 +62,40 @@ const ROW_PARTS = [
   ['..TTTT....', '#', '.#MM...CAA#.', '#', '##########'], // 19 Sports Analytics wall
   ['..TTTT....', 'D', '.#.tt...u.D.', '#', 'JJJJJJ..PP'], // 20
   ['..c..c....', '#', '.D.KK..uKu#.', 'D', '..........'], // 21
-  ['..........', '#', '.#.ss...u.#.', '#', '..kk..kk..'], // 22
+  ['..........', '#', '.#.ss.u.u.#.', '#', '..kk..kk..'], // 22
   ['P........P', '#', '.#P.......#.', '#', '..c...c...']  // 23
 ];
+// Operations Room (NOC): a full-width strip BELOW the original 36x25 office. Row 24 is the
+// divider wall with two doors off the centre hallways (x12, x23); rows 25-29 are the room.
+// x1-34 of each row (left wing | centre | right wing):
+const OPS_DIVIDER = '#'.repeat(12) + 'D' + '#'.repeat(10) + 'D' + '#'.repeat(12); // 24
+const OPS_ROWS = [
+  //  left x1-10     x11-12  centre x13-22   x23-24  right x25-34
+  ['RR.VVVV.RR', '..', 'VVVVVVVVVV', '..', 'RR.VVVV.RR'], // 25 video wall + racks
+  ['..........', '..', '..........', '..', '..........'], // 26
+  ['.NN..NN..R', '..', '..NNNNNN..', '..', 'R..NN..NN.'], // 27 console row
+  ['.c...c....', '..', '...c..c...', '..', '....c...c.'], // 28 operator chairs
+  ['P.........', '..', '..........', '..', '.........P']  // 29
+];
 const WALL_ROW = '#'.repeat(36);
-const LAYOUT = [WALL_ROW, ...ROW_PARTS.map(p => '#' + p.join('') + '#'), WALL_ROW];
+const LAYOUT = [
+  WALL_ROW,
+  ...ROW_PARTS.map(p => '#' + p.join('') + '#'),
+  OPS_DIVIDER,
+  ...OPS_ROWS.map(p => '#' + p.join('') + '#'),
+  WALL_ROW
+];
 
 const COLS = 36;
-const ROWS = 25;
+const ROWS = 31;
+// The original office occupies rows 0-24; the Oval Office stays centred on THAT area.
+const OFFICE_ROWS = 25;
 const TILE = 32; // on-screen tile size
 const T = 16;    // art tile size (scaled 2x)
 const SCALE = TILE / T;
 
-// Oval Office ellipse in art pixels: centred on the map (576x400 on screen).
-const OVAL = { cx: COLS * T / 2, cy: ROWS * T / 2, a: 64, b: 72, ring: 7 };
+// Oval Office ellipse in art pixels: centred on the original office (576x400 on screen).
+const OVAL = { cx: COLS * T / 2, cy: OFFICE_ROWS * T / 2, a: 64, b: 72, ring: 7 };
 
 // Room regions and colors (colors match the dashboard room palette).
 const ROOMS = [
@@ -86,7 +107,8 @@ const ROOMS = [
   { id: 6, name: 'Trading Floor', color: '#22c55e', rect: [25, 2, 34, 6], sign: [25, 1, 34], floor: 'trading' },
   { id: 7, name: 'Crypto Lab', color: '#f7931a', rect: [25, 8, 34, 12], sign: [25, 7, 34], floor: 'crypto' },
   { id: 8, name: 'Memecoin War Room', color: '#ef4444', rect: [25, 14, 34, 18], sign: [25, 13, 34], floor: 'meme' },
-  { id: 9, name: 'Sports Analytics Room', color: '#06b6d4', rect: [25, 20, 34, 23], sign: [25, 19, 34], floor: 'sports' }
+  { id: 9, name: 'Sports Analytics Room', color: '#06b6d4', rect: [25, 20, 34, 23], sign: [25, 19, 34], floor: 'sports' },
+  { id: 10, name: 'Operations Room', label: 'OPERATIONS', color: '#14b8a6', rect: [1, 25, 34, 29], sign: [14, 24, 21], floor: 'noc' }
 ];
 // Decorated hallway areas (not rooms): floor style + optional wall banner.
 const ZONES = [
@@ -102,14 +124,16 @@ const WORK_TARGETS = {
   market_trader: { x: 30, y: 5, room: 'Trading Floor' },
   crypto_analyst: { x: 31, y: 11, room: 'Crypto Lab' },
   memecoin_scout: { x: 28, y: 18, room: 'Memecoin War Room' },
-  sports_analyst: { x: 31, y: 23, room: 'Sports Analytics Room' }
+  sports_analyst: { x: 31, y: 23, room: 'Sports Analytics Room' },
+  operations: { x: 16, y: 28, room: 'Operations Room' }             // centre NOC console chair
 };
 // Lounge seats, in assignment order (agent i takes seat i; extras are spare distinct seats).
 const IDLE_TARGETS = [
   { x: 15, y: 20 }, { x: 16, y: 20 }, { x: 15, y: 22 }, { x: 16, y: 22 },
-  { x: 20, y: 20 }, { x: 19, y: 21 }, { x: 21, y: 21 }, { x: 20, y: 22 }
+  { x: 20, y: 20 }, { x: 19, y: 21 }, { x: 21, y: 21 }, { x: 20, y: 22 },
+  { x: 18, y: 22 }
 ];
-const AGENT_ORDER = ['coordinator', 'researcher', 'writer', 'reviewer', 'market_trader', 'crypto_analyst', 'memecoin_scout', 'sports_analyst'];
+const AGENT_ORDER = ['coordinator', 'researcher', 'writer', 'reviewer', 'market_trader', 'crypto_analyst', 'memecoin_scout', 'sports_analyst', 'operations'];
 // Agents that do not go to the Hangout Room when idle. Diktator (coordinator) stays
 // seated at the executive desk in the Oval Office whether idle or working.
 const IDLE_OVERRIDES = {
@@ -123,7 +147,7 @@ if (LAYOUT.length !== ROWS || LAYOUT.some(r => r.length !== COLS)) {
   throw new Error(`layout must be ${COLS}x${ROWS}: ${LAYOUT.map(r => r.length).join(',')}`);
 }
 const at = (x, y) => (x < 0 || y < 0 || x >= COLS || y >= ROWS ? '#' : LAYOUT[y][x]);
-const FURNITURE = new Set(['T', 'k', 'w', 'L', 'B', 'W', 'F', 'P', 'X', 'f', 'l', 'K', 'M', 'A', 'C', 'Y', 'Z', 'Q', 'H', 'J', 'G']);
+const FURNITURE = new Set(['T', 'k', 'w', 'L', 'B', 'W', 'F', 'P', 'X', 'f', 'l', 'K', 'M', 'A', 'C', 'Y', 'Z', 'Q', 'H', 'J', 'G', 'V', 'R', 'N']);
 const SEATS = new Set(['c', 'E', 'q', 'p', 's', 't', 'u']);
 const code = (ch) => {
   if (ch === '#' || ch === 'o' || FURNITURE.has(ch)) return 1;
@@ -270,6 +294,11 @@ const floorTile = (tx, ty) => {
     rect(ox, oy, T, T, '#1c1830');
     rect(ox, oy + T - 1, T, 1, '#3a2d63'); rect(ox + T - 1, oy, 1, T, '#3a2d63');
     if ((tx * 7 + ty * 3) % 5 === 0) px(ox + 8, oy + 8, '#f7931a');
+  } else if (kind === 'noc') { // operations: dark raised-floor tiles with cable-trench lines
+    rect(ox, oy, T, T, '#10151c');
+    rect(ox, oy, T, 1, '#1b2430'); rect(ox, oy, 1, T, '#1b2430');
+    rect(ox + 1, oy + 1, T - 1, 1, '#141b24');
+    if ((tx * 5 + ty * 3) % 7 === 0) px(ox + 8, oy + 8, '#14b8a6');
   } else if (kind === 'meme') { // war-room floor, dark red with hatching
     rect(ox, oy, T, T, '#2e1a1f');
     for (let i = 0; i < T; i += 4) px(ox + i, oy + ((i + ty * 4) % T), '#43242b');
@@ -544,12 +573,20 @@ const drawFurniture = (tx, ty, ch) => {
       break;
     }
     case 'f': { // flag stand
+      if (first('f')) {
+        // Finnish national flag, 13 x 8 art px (8:13 = 0.615 ~ official 11:18 = 0.611).
+        // Pole moved to the hoist side of the same tile so the fly fits inside the tile.
+        // Cross, scaled from the official 5+3+10 (width) and 4+3+4 (height): 4+2+7 and 3+2+3.
+        rect(ox + 2, oy + 1, 1, 15, '#c9a227'); px(ox + 2, oy, '#f0d060');
+        rect(ox + 0, oy + 15, 5, 1, '#6b4a12');
+        rect(ox + 3, oy + 2, 13, 8, '#f7f7f4');     // white field
+        rect(ox + 7, oy + 2, 2, 8, '#003580');      // vertical bar: 4 | 2 | 7
+        rect(ox + 3, oy + 5, 13, 2, '#003580');     // horizontal bar: 3 | 2 | 3
+        break;
+      }
       rect(ox + 7, oy + 1, 1, 15, '#c9a227'); px(ox + 7, oy, '#f0d060');
       rect(ox + 5, oy + 15, 5, 1, '#6b4a12');
-      if (first('f')) { // stars & stripes
-        for (let j = 0; j < 8; j++) rect(ox + 8, oy + 2 + j, 7, 1, j % 2 ? '#f4f1e8' : '#b22234');
-        rect(ox + 8, oy + 2, 3, 4, '#3c3b6e'); px(ox + 9, oy + 3, '#ffffff');
-      } else { // navy standard
+      { // navy standard
         rect(ox + 8, oy + 2, 7, 8, '#1f3a68'); rect(ox + 8, oy + 10, 7, 1, '#c9a227');
         rect(ox + 10, oy + 4, 3, 3, '#c9a227');
       }
@@ -660,6 +697,43 @@ const drawFurniture = (tx, ty, ch) => {
       rect(ox, oy + 12, T, 1, '#000000', 0.25);
       break;
     }
+    case 'V': { // operations status wall: service tiles with health lights (continuous run)
+      const l = first('V'), r = !same(tx + 1, ty, 'V');
+      rect(ox, oy + 1, T, 11, '#0b0f14');
+      rect(ox + (l ? 1 : 0), oy + 2, T - (l ? 1 : 0) - (r ? 1 : 0), 9, '#07131a');
+      const health = ['#39d98a', '#39d98a', '#39d98a', '#f5c542', '#39d98a', '#ff5d73'];
+      for (let k = 0; k < 2; k++) {
+        const bx = ox + 2 + k * 7;
+        if ((l && k === 0 && bx < ox + 2) || (r && bx + 5 > ox + T - 1)) continue;
+        rect(bx, oy + 3, 5, 3, '#10303a');
+        px(bx + 1, oy + 4, health[(tx * 2 + k) % health.length]);
+        rect(bx + 2, oy + 4, 2, 1, '#5fd0ff');
+        rect(bx, oy + 7, 5, 1, '#10303a');
+        rect(bx, oy + 8, 1 + ((tx + k) % 5), 1, '#14b8a6');
+      }
+      rect(ox, oy + 12, T, 1, '#000000', 0.3);
+      break;
+    }
+    case 'R': { // server rack with blinking status LEDs
+      rect(ox + 3, oy, 10, 15, '#0d1117'); rect(ox + 3, oy, 10, 1, '#262c36');
+      rect(ox + 3, oy, 1, 15, '#1c222b'); rect(ox + 12, oy, 1, 15, '#1c222b');
+      for (let j = 0; j < 5; j++) {
+        rect(ox + 4, oy + 2 + j * 2 + (j > 2 ? 1 : 0), 8, 1, '#1f2630');
+        px(ox + 5, oy + 2 + j * 2 + (j > 2 ? 1 : 0), (tx + ty + j) % 4 === 0 ? '#f5c542' : '#39d98a');
+        px(ox + 7, oy + 2 + j * 2 + (j > 2 ? 1 : 0), '#5fd0ff');
+      }
+      shadowBelow(ox, oy, 10, 3);
+      break;
+    }
+    case 'N': { // NOC console: dark desk with two health monitors
+      slab(tx, ty, 'N', '#1e2530', '#2b3442', '#141a22');
+      rect(ox + 2, oy + 2, 6, 5, '#070b10'); rect(ox + 3, oy + 3, 4, 3, '#0f2a2e');
+      px(ox + 4, oy + 4, '#39d98a'); px(ox + 5, oy + 4, '#39d98a'); px(ox + 6, oy + 5, (tx % 3 === 0) ? '#f5c542' : '#39d98a');
+      rect(ox + 9, oy + 2, 5, 5, '#070b10'); rect(ox + 10, oy + 3, 3, 3, '#0e2233');
+      rect(ox + 10, oy + 5, 3, 1, '#5fd0ff');
+      rect(ox + 4, oy + 9, 8, 1, '#3a4452');
+      break;
+    }
     case 'G': { // strategy map table (Grand Hall)
       slab(tx, ty, 'G', '#6b4a2a', '#8a6238', '#4a321c');
       rect(ox + (first('G') ? 3 : 0), oy + 4, T - (first('G') ? 3 : 0) - (!same(tx + 1, ty, 'G') ? 3 : 0), 8, '#2d5d8c');
@@ -766,7 +840,7 @@ const sign = (room) => {
     return;
   }
   const [x1, y, x2] = room.sign;
-  plate(room.name.toUpperCase(), (x1 * T + (x2 + 1) * T) / 2, y * T + 3, room.color);
+  plate(room.label || room.name.toUpperCase(), (x1 * T + (x2 + 1) * T) / 2, y * T + 3, room.color);
 };
 
 // ---------------------------------------------------------------------------
