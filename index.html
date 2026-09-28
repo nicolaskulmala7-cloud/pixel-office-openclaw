@@ -196,10 +196,10 @@
             return tiles;
         };
         const DEFAULT_ROOMS = [
-            { id: 1, name: 'Command Center', tiles: rectTiles(7, 3, 12, 7) },
-            { id: 2, name: 'Research Lab', tiles: rectTiles(1, 10, 11, 16) },
-            { id: 3, name: 'Writing Studio', tiles: rectTiles(13, 10, 18, 16) },
-            { id: 4, name: 'Review Room', tiles: rectTiles(13, 19, 18, 22) }
+            { id: 1, name: 'Command Center', tiles: rectTiles(1, 2, 9, 8) },
+            { id: 2, name: 'Research Lab', tiles: rectTiles(11, 2, 18, 8) },
+            { id: 3, name: 'Writing Studio', tiles: rectTiles(1, 14, 9, 23) },
+            { id: 4, name: 'Review Room', tiles: rectTiles(11, 14, 18, 23) }
         ];
         const DEFAULT_AGENTS = [
             { id: 'coordinator', name: 'Chief of Staff', role: 'Coordinator', color: 0, room: 'Command Center' },
@@ -226,7 +226,7 @@
         }
 
         // Matriz de colisiones (0=Suelo, 1=Pared/Mueble, 2=Puerta, 3=Silla)
-        let default_COLLISION_MAP = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,0,3,1,1,3,0,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,0,3,1,1,3,0,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,0,3,1,1,3,0,1,0,0,0,0,0,1],[1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1],[1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,1,1,1,1,1,1,1,1,1,0,0,0,3,1,1,3,0,1],[1,0,0,3,0,0,3,0,0,3,0,0,1,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,1,0,3,1,1,3,0,1],[1,0,0,0,1,1,1,1,0,0,1,0,1,0,0,0,0,0,0,1],[1,0,0,3,0,0,3,0,0,3,0,0,1,0,1,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,1,1,1],[1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,2,1,1,1],[1,1,1,1,1,1,1,1,1,1,0,0,1,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],[1,0,0,0,1,1,1,1,0,0,0,0,1,0,1,1,1,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,3,0,0,0,1],[1,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]];
+        let default_COLLISION_MAP = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1],[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],[1,0,0,0,3,0,3,0,0,0,1,0,1,1,0,0,1,1,0,1],[1,0,0,1,1,1,1,1,0,0,1,0,3,0,0,0,0,3,0,1],[1,0,0,1,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,1],[1,0,0,0,3,0,3,0,0,0,1,0,1,1,0,0,1,1,0,1],[1,1,0,0,0,0,0,0,0,1,1,0,3,0,0,0,0,3,0,1],[1,1,1,1,1,2,1,1,1,1,1,1,1,1,2,1,1,1,1,1],[1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],[1,1,1,1,1,2,1,1,1,1,1,1,1,1,2,1,1,1,1,1],[1,1,1,0,0,0,0,0,1,1,1,1,1,0,0,1,1,0,1,1],[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],[1,0,1,1,0,0,1,1,0,0,1,0,0,3,0,0,3,0,0,1],[1,0,0,3,0,0,3,0,0,0,1,0,0,1,1,1,1,0,0,1],[1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,0,0,1],[1,0,0,0,0,0,0,0,0,0,1,0,0,3,0,0,3,0,0,1],[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,1,1],[1,1,0,1,1,1,0,0,0,1,1,0,3,0,0,0,0,0,1,1],[1,1,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]];
         let COLLISION_MAP = default_COLLISION_MAP;
         try {
             const savedMap = localStorage.getItem('pixel_office_collision');
@@ -309,7 +309,9 @@
                 const NUM_CHARS = 6;
                 // Solo background + chars (7 imágenes)
                 const totalImages = 1 + NUM_CHARS;
-                let triedFallbackBackground = false;
+                // Office art matching the OpenClaw layout first, then a licensed export, then the placeholder grid
+                const backgroundCandidates = ['assets/office-openclaw.png', 'assets/oficina.png', 'assets/oficina-placeholder.png'];
+                let backgroundIndex = 0;
                 
                 const onLoad = () => {
                     loadCount++;
@@ -325,16 +327,17 @@
                 this.sprites.background.crossOrigin = 'anonymous';
                 this.sprites.background.onload = onLoad;
                 this.sprites.background.onerror = () => {
-                    if (triedFallbackBackground) {
-                        console.error('Failed to load placeholder office background: assets/oficina-placeholder.png');
+                    const failed = backgroundCandidates[backgroundIndex];
+                    backgroundIndex++;
+                    if (backgroundIndex >= backgroundCandidates.length) {
+                        console.error(`Failed to load office background: ${failed}`);
                         onLoad();
                         return;
                     }
-                    triedFallbackBackground = true;
-                    console.warn('assets/oficina.png not found. Using placeholder background instead.');
-                    this.sprites.background.src = 'assets/oficina-placeholder.png';
+                    console.warn(`${failed} not found. Trying ${backgroundCandidates[backgroundIndex]}.`);
+                    this.sprites.background.src = backgroundCandidates[backgroundIndex];
                 };
-                this.sprites.background.src = 'assets/oficina.png';
+                this.sprites.background.src = backgroundCandidates[0];
 
                 // Cargar personajes
                 this.sprites.chars = [];
@@ -948,10 +951,10 @@
                         const [tx, ty] = key.split(',').map(Number);
                         // Calculamos si la casilla es par o impar para mantener el patrón cuadriculado
                         const isEven = ((tx + ty) % 2) === 0;
-                        // Usamos tiles sin nada del suelo azul de la sala inferior (ej. X=4, Y=22 es par, X=5, Y=22 es impar)
+                        // Usamos tiles vacíos del suelo del pasillo (X=4/5, Y=11)
                         // Esto evita que entren recortes de muros u otros muebles en los bordes
                         const srcX = isEven ? 4 : 5;
-                        const srcY = 22;
+                        const srcY = 11; // plain hallway floor in office-openclaw.png
                         
                         ctx.drawImage(
                             spriteManager.sprites.background,
@@ -1050,8 +1053,10 @@
             char.defaultRoom = agentConfig.room || "";
             char.personality = agentConfig.personality || "Trabajador";
 
-            // Use server position, else a tile in the default room, else random
-            if (agentConfig.x !== undefined && agentConfig.y !== undefined) {
+            // Use server position (if it is still walkable on the current map), else a tile in the default room, else random
+            const savedTileWalkable = (agentConfig.x !== undefined && agentConfig.y !== undefined) &&
+                COLLISION_MAP[Math.floor(agentConfig.y / GRID_SIZE)]?.[Math.floor(agentConfig.x / GRID_SIZE)] === 0;
+            if (savedTileWalkable) {
                 char.x = agentConfig.x;
                 char.y = agentConfig.y;
             } else {

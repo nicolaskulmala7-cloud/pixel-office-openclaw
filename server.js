@@ -111,18 +111,25 @@ const rectTiles = (x1, y1, x2, y2) => {
   return tiles;
 };
 
-const DEFAULT_ROOMS = [
-  { id: 1, name: 'Command Center', color: '#3b82f6', tiles: rectTiles(7, 3, 12, 7) },
-  { id: 2, name: 'Research Lab', color: '#ec4899', tiles: rectTiles(1, 10, 11, 16) },
-  { id: 3, name: 'Writing Studio', color: '#10b981', tiles: rectTiles(13, 10, 18, 16) },
-  { id: 4, name: 'Review Room', color: '#f59e0b', tiles: rectTiles(13, 19, 18, 22) }
+// Plano de la oficina OpenClaw (generado por tools/build-office-map.js junto a assets/office-openclaw.png)
+const OFFICE_LAYOUT = readJSONFile(path.join(__dirname, 'assets', 'office-layout.json')) || {};
+const DEFAULT_COLLISION = Array.isArray(OFFICE_LAYOUT.collision) ? OFFICE_LAYOUT.collision : null;
+const SPAWNS = OFFICE_LAYOUT.spawns || {};
+const spawnX = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].x : fallback);
+const spawnY = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].y : fallback);
+
+const DEFAULT_ROOMS = Array.isArray(OFFICE_LAYOUT.rooms) && OFFICE_LAYOUT.rooms.length ? OFFICE_LAYOUT.rooms : [
+  { id: 1, name: 'Command Center', color: '#3b82f6', tiles: rectTiles(1, 2, 9, 8) },
+  { id: 2, name: 'Research Lab', color: '#ec4899', tiles: rectTiles(11, 2, 18, 8) },
+  { id: 3, name: 'Writing Studio', color: '#10b981', tiles: rectTiles(1, 14, 9, 23) },
+  { id: 4, name: 'Review Room', color: '#f59e0b', tiles: rectTiles(11, 14, 18, 23) }
 ];
 
 const DEFAULT_AGENTS = [
-  { id: 'coordinator', name: 'Chief of Staff', role: 'Coordinator', color: 0, x: tileCenter(9), y: tileCenter(7), room: 'Command Center' },
-  { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, x: tileCenter(5), y: tileCenter(11), room: 'Research Lab' },
-  { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, x: tileCenter(15), y: tileCenter(11), room: 'Writing Studio' },
-  { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, x: tileCenter(15), y: tileCenter(20), room: 'Review Room' }
+  { id: 'coordinator', name: 'Chief of Staff', role: 'Coordinator', color: 0, x: spawnX('coordinator', 5), y: spawnY('coordinator', 3), room: 'Command Center' },
+  { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, x: spawnX('researcher', 14), y: spawnY('researcher', 6), room: 'Research Lab' },
+  { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, x: spawnX('writer', 5), y: spawnY('writer', 18), room: 'Writing Studio' },
+  { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, x: spawnX('reviewer', 14), y: spawnY('reviewer', 20), room: 'Review Room' }
 ].map(a => ({ ...a, personality: 'Trabajador', state: 'idle', active: true }));
 
 // Salas del demo original (sin tiles); si el mapa guardado solo contiene estas, se reemplaza
@@ -399,10 +406,11 @@ app.post('/api/rooms', (req, res) => {
 app.get('/api/collision', (req, res) => {
   try {
     const mapData = loadMapData();
-    if (!mapData || !mapData.collision) {
+    const collision = (mapData && mapData.collision) || DEFAULT_COLLISION;
+    if (!collision) {
       throw new Error('Mapa no disponible');
     }
-    res.json(mapData.collision);
+    res.json(collision);
   } catch (e) {
     res.status(500).json({ error: e.message || 'Mapa no disponible' });
   }
