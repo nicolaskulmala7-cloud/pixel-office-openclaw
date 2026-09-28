@@ -27,12 +27,17 @@ const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || path.join(os.ho
 const STATE_DIR = process.env.PIXEL_SYNC_STATE_DIR || path.join(os.homedir(), '.local', 'state', 'pixel-office-sync');
 const IDENTITY_PATH = path.join(STATE_DIR, 'device-identity.json');
 
-// OpenClaw agent -> Pixel Office agent. `slot` is the Pixel Office sprite/color index (0-3).
+// OpenClaw agent -> Pixel Office agent. `slot` is the Pixel Office sprite/color index (0-7).
+// Order matters: it matches targets.agentOrder in assets/office-layout.json (lounge seat i).
 const AGENT_MAP = [
   { openclaw: 'coordinator', pixel: 'coordinator', slot: 0, name: 'Diktator', room: 'Command Center' },
   { openclaw: 'researcher', pixel: 'researcher', slot: 1, name: 'Researcher', room: 'Research Lab' },
   { openclaw: 'writer', pixel: 'writer', slot: 2, name: 'Writer', room: 'Writing Studio' },
-  { openclaw: 'reviewer', pixel: 'reviewer', slot: 3, name: 'Reviewer', room: 'Review Room' }
+  { openclaw: 'reviewer', pixel: 'reviewer', slot: 3, name: 'Reviewer', room: 'Review Room' },
+  { openclaw: 'market_trader', pixel: 'market_trader', slot: 4, name: 'Trader', room: 'Trading Floor' },
+  { openclaw: 'crypto_analyst', pixel: 'crypto_analyst', slot: 5, name: 'Crypto', room: 'Crypto Lab' },
+  { openclaw: 'memecoin_scout', pixel: 'memecoin_scout', slot: 6, name: 'Memecoin Scout', room: 'Memecoin War Room' },
+  { openclaw: 'sports_analyst', pixel: 'sports_analyst', slot: 7, name: 'Sports Analyst', room: 'Sports Analytics Room' }
 ];
 const COORDINATOR = 'coordinator';
 const HANGOUT_ROOM = 'Hangout Room'; // idle agents rest here

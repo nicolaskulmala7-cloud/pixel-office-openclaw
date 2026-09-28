@@ -5,18 +5,18 @@
 //   node tools/build-office-map.js
 //
 // Outputs:
-//   assets/office-openclaw.png   640x800 background (20x25 tiles of 32px, drawn at 16px and scaled 2x)
+//   assets/office-openclaw.png   1152x800 background (36x25 tiles of 32px, drawn at 16px and scaled 2x)
 //   assets/office-layout.json    { cols, rows, tile, collision, rooms, targets, spawns }
 //
 // Collision codes match index.html: 0 floor, 1 wall/furniture, 2 door, 3 chair/seat.
 //
-// Plan:              Research Lab
-//                         |
-//   Review Room --  OVAL OFFICE  -- Writing Studio
-//                  (Command Center)
-//                         |
-//                    Hangout Room
-// A hallway ring surrounds the Oval Office, whose centre is the exact map centre.
+// Plan (desktop, wide):
+//   Research Lab   |        Grand Hall         |  Trading Floor
+//                  |                           |  Crypto Lab
+//   Writing Studio |  OVAL OFFICE (map centre) |  Memecoin War Room
+//                  |                           |
+//   Review Room    |       Hangout Room        |  Sports Analytics Room
+// Hallways run between the side rooms and the centre column and ring the Oval Office.
 
 'use strict';
 
@@ -25,78 +25,95 @@ const path = require('path');
 const zlib = require('zlib');
 
 // ---------------------------------------------------------------------------
-// Layout (20 x 25). Legend:
+// Layout (36 x 25). Legend:
 //   #  wall             D  door              .  floor            o  Oval Office wall (curved)
 //   r  rug (walkable)   c  chair             T  table            k  computer desk
 //   w  writing desk     L  lab bench         B  bookshelf        W  whiteboard
 //   F  filing cabinet   P  plant
 //   Oval Office:  X executive desk   E executive chair   f flag   l lamp table
 //                 q sofa seat (faces right)   p sofa seat (faces left)   K coffee table
-//   Hangout:      s sofa seat (faces up)   u lounge chair   M TV   A arcade   C coffee bar
-const LAYOUT = [
-  '####################', // 0
-  '####################', // 1  Research Lab back wall
-  '#BBB.WWPLLLL.WW.BBB#', // 2
-  '#.kk..LL.kk..LL.kk.#', // 3
-  '#..c..c..c....c.c..#', // 4
-  '#P................P#', // 5
-  '#########DD#########', // 6
-  '#FF.#..........#.BB#', // 7  hallway ring (top)
-  '#...#.PooooooP.#...#', // 8
-  '#kk.#.oooffooo.#.ww#', // 9
-  '#c..#.oo.El.oo.#.c.#', // 10
-  '#...D.D..XX..D.D...#', // 11 Review -- Oval Office -- Writing
-  '#TT.#.oqrrrrpo.#.ww#', // 12 map centre row
-  '#TT.#.oqrKKrpo.#.c.#', // 13
-  '#c..#.oolrrloo.#...#', // 14
-  '#...#.ooo..ooo.#..B#', // 15
-  '#WW.#.PooDDooP.#...#', // 16
-  '#P..#..........#..P#', // 17 hallway ring (bottom)
-  '#########DD#########', // 18 Hangout Room back wall
-  '#P.MM........AA.CCP#', // 19
-  '#..KK..............#', // 20
-  '#.ssss.......uKu...#', // 21
-  '#.............u...P#', // 22
-  '#B......ssss......B#', // 23
-  '####################'  // 24
+//   Hangout:      s sofa seat (faces up)   t sofa seat (faces down)   u lounge chair
+//                 M TV   A arcade   C coffee bar
+//   Markets:      Y wall screen   Z trading desk   Q crypto rig   H war table   J scoreboard
+//   Grand Hall:   G strategy map table
+//
+// Each row = left rooms (x1-10) | wall x11 | centre (x12-23) | wall x24 | right rooms (x25-34).
+const ROW_PARTS = [
+  //  left x1-10     x11  centre x12-23     x24  right x25-34
+  ['##########', '#', '############', '#', '##########'], // 1  back walls
+  ['BBB.WW.BBB', '#', 'P..YYYYYY..P', '#', 'YYYYYYYY.P'], // 2  Research Lab | Grand Hall | Trading Floor
+  ['..........', '#', '............', '#', '..........'], // 3
+  ['.kk..kk...', '#', '..f..GG..f..', 'D', '.ZZ..ZZ.ZZ'], // 4
+  ['.c...c....', 'D', '............', '#', '.c...c..c.'], // 5
+  ['..........', '#', 'P..........P', '#', 'P.........'], // 6
+  ['.LL..LL..P', '#', '............', '#', '##########'], // 7  hallway | Crypto Lab wall
+  ['.c...c....', '#', '..PooooooP..', '#', 'QQ.QQ..PWW'], // 8
+  ['##########', '#', '..oooffooo..', '#', '..........'], // 9  Writing Studio wall
+  ['BB....BBP.', '#', '..oo.El.oo..', 'D', '..kk..kk..'], // 10
+  ['..........', '#', '..D..XX..D..', '#', '..c...c...'], // 11
+  ['.ww..ww...', 'D', '..oqrrrrpo..', '#', 'P........P'], // 12 map centre row
+  ['..c...c...', '#', '..oqrKKrpo..', '#', '##########'], // 13 Memecoin War Room wall
+  ['..........', '#', '..oolrrloo..', '#', 'YYYYYY...P'], // 14
+  ['P..rrrr..P', '#', '..ooo..ooo..', '#', '..........'], // 15
+  ['##########', '#', '..PooDDooP..', 'D', '..HHHH....'], // 16 Review Room wall
+  ['FF..WW..FF', '#', '............', '#', '..HHHH...F'], // 17 hallway
+  ['..........', '#', '.####DD####.', '#', '...cc....F'], // 18 Hangout Room wall
+  ['..TTTT....', '#', '.#MM...CAA#.', '#', '##########'], // 19 Sports Analytics wall
+  ['..TTTT....', 'D', '.#.tt...u.D.', '#', 'JJJJJJ..PP'], // 20
+  ['..c..c....', '#', '.D.KK..uKu#.', 'D', '..........'], // 21
+  ['..........', '#', '.#.ss...u.#.', '#', '..kk..kk..'], // 22
+  ['P........P', '#', '.#P.......#.', '#', '..c...c...']  // 23
 ];
+const WALL_ROW = '#'.repeat(36);
+const LAYOUT = [WALL_ROW, ...ROW_PARTS.map(p => '#' + p.join('') + '#'), WALL_ROW];
 
-const COLS = 20;
+const COLS = 36;
 const ROWS = 25;
 const TILE = 32; // on-screen tile size
 const T = 16;    // art tile size (scaled 2x)
 const SCALE = TILE / T;
 
-// Oval Office ellipse in art pixels: centred on the map (320x400 on screen).
+// Oval Office ellipse in art pixels: centred on the map (576x400 on screen).
 const OVAL = { cx: COLS * T / 2, cy: ROWS * T / 2, a: 64, b: 72, ring: 7 };
 
 // Room regions and colors (colors match the dashboard room palette).
 const ROOMS = [
   { id: 1, name: 'Command Center', color: '#c9a227', oval: true, floor: 'oval' },
-  { id: 2, name: 'Research Lab', color: '#ec4899', rect: [1, 2, 18, 5], sign: [1, 1, 18], floor: 'lab' },
-  { id: 3, name: 'Writing Studio', color: '#10b981', rect: [16, 7, 18, 17], sign: [15, 6, 18], floor: 'wood' },
-  { id: 4, name: 'Review Room', color: '#f59e0b', rect: [1, 7, 3, 17], sign: [0, 6, 4], floor: 'checker' },
-  { id: 5, name: 'Hangout Room', color: '#8b5cf6', rect: [1, 19, 18, 23], sign: [1, 18, 8], floor: 'lounge' }
+  { id: 2, name: 'Research Lab', color: '#ec4899', rect: [1, 2, 10, 8], sign: [1, 1, 10], floor: 'lab' },
+  { id: 3, name: 'Writing Studio', color: '#10b981', rect: [1, 10, 10, 15], sign: [1, 9, 10], floor: 'wood' },
+  { id: 4, name: 'Review Room', color: '#f59e0b', rect: [1, 17, 10, 23], sign: [1, 16, 10], floor: 'checker' },
+  { id: 5, name: 'Hangout Room', color: '#8b5cf6', rect: [14, 19, 21, 23], sign: [13, 18, 16], floor: 'lounge' },
+  { id: 6, name: 'Trading Floor', color: '#22c55e', rect: [25, 2, 34, 6], sign: [25, 1, 34], floor: 'trading' },
+  { id: 7, name: 'Crypto Lab', color: '#f7931a', rect: [25, 8, 34, 12], sign: [25, 7, 34], floor: 'crypto' },
+  { id: 8, name: 'Memecoin War Room', color: '#ef4444', rect: [25, 14, 34, 18], sign: [25, 13, 34], floor: 'meme' },
+  { id: 9, name: 'Sports Analytics Room', color: '#06b6d4', rect: [25, 20, 34, 23], sign: [25, 19, 34], floor: 'sports' }
+];
+// Decorated hallway areas (not rooms): floor style + optional wall banner.
+const ZONES = [
+  { name: 'Grand Hall', rect: [12, 2, 23, 6], sign: [12, 1, 23], floor: 'marble', color: '#c9a227' }
 ];
 
 // Deterministic agent destinations (tile coordinates).
 const WORK_TARGETS = {
-  coordinator: { x: 9, y: 10, room: 'Command Center' },  // executive chair behind the desk
-  researcher: { x: 9, y: 4, room: 'Research Lab' },
-  writer: { x: 17, y: 10, room: 'Writing Studio' },
-  reviewer: { x: 1, y: 14, room: 'Review Room' }
+  coordinator: { x: 17, y: 10, room: 'Command Center' },  // executive chair behind the desk
+  researcher: { x: 6, y: 5, room: 'Research Lab' },
+  writer: { x: 7, y: 13, room: 'Writing Studio' },
+  reviewer: { x: 3, y: 21, room: 'Review Room' },
+  market_trader: { x: 30, y: 5, room: 'Trading Floor' },
+  crypto_analyst: { x: 31, y: 11, room: 'Crypto Lab' },
+  memecoin_scout: { x: 28, y: 18, room: 'Memecoin War Room' },
+  sports_analyst: { x: 31, y: 23, room: 'Sports Analytics Room' }
 };
 // Lounge seats, in assignment order (agent i takes seat i; extras are spare distinct seats).
 const IDLE_TARGETS = [
-  { x: 3, y: 21 }, { x: 4, y: 21 }, { x: 13, y: 21 }, { x: 15, y: 21 },
-  { x: 2, y: 21 }, { x: 5, y: 21 }, { x: 14, y: 22 },
-  { x: 8, y: 23 }, { x: 9, y: 23 }, { x: 10, y: 23 }, { x: 11, y: 23 }
+  { x: 15, y: 20 }, { x: 16, y: 20 }, { x: 15, y: 22 }, { x: 16, y: 22 },
+  { x: 20, y: 20 }, { x: 19, y: 21 }, { x: 21, y: 21 }, { x: 20, y: 22 }
 ];
-const AGENT_ORDER = ['coordinator', 'researcher', 'writer', 'reviewer'];
+const AGENT_ORDER = ['coordinator', 'researcher', 'writer', 'reviewer', 'market_trader', 'crypto_analyst', 'memecoin_scout', 'sports_analyst'];
 // Agents that do not go to the Hangout Room when idle. Diktator (coordinator) stays
 // seated at the executive desk in the Oval Office whether idle or working.
 const IDLE_OVERRIDES = {
-  coordinator: { x: 9, y: 10, room: 'Command Center' }
+  coordinator: { x: 17, y: 10, room: 'Command Center' }
 };
 
 // ---------------------------------------------------------------------------
@@ -106,8 +123,8 @@ if (LAYOUT.length !== ROWS || LAYOUT.some(r => r.length !== COLS)) {
   throw new Error(`layout must be ${COLS}x${ROWS}: ${LAYOUT.map(r => r.length).join(',')}`);
 }
 const at = (x, y) => (x < 0 || y < 0 || x >= COLS || y >= ROWS ? '#' : LAYOUT[y][x]);
-const FURNITURE = new Set(['T', 'k', 'w', 'L', 'B', 'W', 'F', 'P', 'X', 'f', 'l', 'K', 'M', 'A', 'C']);
-const SEATS = new Set(['c', 'E', 'q', 'p', 's', 'u']);
+const FURNITURE = new Set(['T', 'k', 'w', 'L', 'B', 'W', 'F', 'P', 'X', 'f', 'l', 'K', 'M', 'A', 'C', 'Y', 'Z', 'Q', 'H', 'J', 'G']);
+const SEATS = new Set(['c', 'E', 'q', 'p', 's', 't', 'u']);
 const code = (ch) => {
   if (ch === '#' || ch === 'o' || FURNITURE.has(ch)) return 1;
   if (ch === 'D') return 2;
@@ -164,6 +181,7 @@ const rectTiles = ([x1, y1, x2, y2]) => {
 };
 const roomTiles = (r) => (r.oval ? ovalTiles : rectTiles(r.rect));
 const roomAt = (x, y) => ROOMS.find(r => roomTiles(r).some(t => t.x === x && t.y === y));
+const zoneAt = (x, y) => ZONES.find(z => x >= z.rect[0] && x <= z.rect[2] && y >= z.rect[1] && y <= z.rect[3]);
 const isWall = (x, y) => at(x, y) === '#' || at(x, y) === 'D';
 
 // ---------------------------------------------------------------------------
@@ -206,7 +224,8 @@ const FONT = {
   O: ['111', '101', '101', '101', '111'], R: ['110', '101', '110', '101', '101'],
   S: ['111', '100', '111', '001', '111'], T: ['111', '010', '010', '010', '010'],
   U: ['101', '101', '101', '101', '111'], V: ['101', '101', '101', '101', '010'],
-  W: ['101', '101', '111', '111', '101'], ' ': ['000', '000', '000', '000', '000']
+  W: ['101', '101', '111', '111', '101'], P: ['110', '101', '110', '100', '100'],
+  Y: ['101', '101', '010', '010', '010'], ' ': ['000', '000', '000', '000', '000']
 };
 const textWidth = (s) => s.length * 4 - 1;
 const text = (s, x, y, color) => {
@@ -223,7 +242,8 @@ const HALL = '#9aa0ab';
 const floorTile = (tx, ty) => {
   const ox = tx * T, oy = ty * T;
   const room = roomAt(tx, ty);
-  const kind = room ? room.floor : 'hall';
+  const zone = room ? null : zoneAt(tx, ty);
+  const kind = room ? room.floor : (zone ? zone.floor : 'hall');
   if (kind === 'lab') {
     rect(ox, oy, T, T, '#ece4ee');
     rect(ox, oy + T - 1, T, 1, '#d4c6d8'); rect(ox + T - 1, oy, 1, T, '#d4c6d8');
@@ -242,6 +262,24 @@ const floorTile = (tx, ty) => {
   } else if (kind === 'lounge') {
     rect(ox, oy, T, T, '#6d5f99');
     for (let j = 1; j < T; j += 4) for (let i = (j % 8 === 1 ? 1 : 3); i < T; i += 4) px(ox + i, oy + j, '#7b6ca8');
+  } else if (kind === 'trading') { // dark trading-floor carpet with a fine grid
+    rect(ox, oy, T, T, '#1f2d3d');
+    rect(ox, oy + 7, T, 1, '#263a50'); rect(ox + 7, oy, 1, T, '#263a50');
+    if ((tx + ty) % 3 === 0) px(ox + 11, oy + 3, '#2f4a66');
+  } else if (kind === 'crypto') { // dark tech floor with a neon grid
+    rect(ox, oy, T, T, '#1c1830');
+    rect(ox, oy + T - 1, T, 1, '#3a2d63'); rect(ox + T - 1, oy, 1, T, '#3a2d63');
+    if ((tx * 7 + ty * 3) % 5 === 0) px(ox + 8, oy + 8, '#f7931a');
+  } else if (kind === 'meme') { // war-room floor, dark red with hatching
+    rect(ox, oy, T, T, '#2e1a1f');
+    for (let i = 0; i < T; i += 4) px(ox + i, oy + ((i + ty * 4) % T), '#43242b');
+    rect(ox, oy + T - 1, T, 1, '#3a2027');
+  } else if (kind === 'sports') { // turf stripes with a pitch line
+    rect(ox, oy, T, T, (tx % 2) ? '#2f7d3b' : '#2a7035');
+    if (ty === 21) rect(ox, oy + 7, T, 1, '#d9f2dc');
+  } else if (kind === 'marble') { // Grand Hall marble
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) rect(ox + i * 8, oy + j * 8, 8, 8, (i + j) % 2 ? '#d3d7de' : '#e3e6eb');
+    px(ox + 3, oy + 12, '#c3c8d0'); px(ox + 4, oy + 11, '#c3c8d0'); px(ox + 12, oy + 4, '#c3c8d0');
   } else if (kind === 'oval') {
     rect(ox, oy, T, T, '#e3d3a8'); // repainted by the oval overlay
   } else {
@@ -421,7 +459,7 @@ const drawFurniture = (tx, ty, ch) => {
     }
     case 'k': { // computer desk
       slab(tx, ty, 'k', '#9a7550', '#b48d65', '#6e5236');
-      monitor(ox + 4, oy + 2, room && room.floor === 'lab' ? '#f59ac8' : '#7fc8f8');
+      monitor(ox + 4, oy + 2, ({ lab: '#f59ac8', crypto: '#f7931a', sports: '#5fd8ee' })[room && room.floor] || '#7fc8f8');
       rect(ox + 3, oy + 10, 8, 1, '#3a3f4b');
       px(ox + 12, oy + 10, '#3a3f4b');
       break;
@@ -565,6 +603,70 @@ const drawFurniture = (tx, ty, ch) => {
       }
       break;
     }
+    // --- Markets / Grand Hall ---------------------------------------------
+    case 'Y': { // wall screen with a live chart (continuous across the run)
+      const l = first('Y'), r = !same(tx + 1, ty, 'Y');
+      const kind = room ? room.floor : 'marble';
+      const bg = ({ trading: '#0c2218', meme: '#26090d', marble: '#0f1f3a' })[kind] || '#101318';
+      rect(ox, oy + 1, T, 11, '#141821');
+      rect(ox + (l ? 1 : 0), oy + 2, T - (l ? 1 : 0) - (r ? 1 : 0), 9, bg);
+      for (let i = 0; i < T; i++) {
+        const gx = ox + i;
+        if ((l && i === 0) || (r && i === T - 1)) continue;
+        if (kind === 'marble') { // world map with status dots
+          if (Math.sin(gx * 0.35) + Math.cos(gx * 0.11) > 0.4) rect(gx, oy + 4 + (gx % 3), 1, 3, '#2e7d4f');
+          if (gx % 11 === 0) px(gx, oy + 5, '#f0d060');
+        } else { // price line + candles
+          const v = Math.round(5 + 3 * Math.sin(gx * 0.21) + (kind === 'meme' ? 2 * Math.sin(gx * 0.9) : Math.cos(gx * 0.07)));
+          const y = oy + 2 + Math.max(0, Math.min(8, 9 - v));
+          px(gx, y, kind === 'meme' ? '#ff5d73' : '#39d98a');
+          if (gx % 3 === 0) rect(gx, y + 1, 1, 2, (gx % 6 === 0) ? '#39d98a' : '#ff5d73');
+        }
+      }
+      rect(ox, oy + 12, T, 1, '#000000', 0.25);
+      break;
+    }
+    case 'Z': { // trading desk with two chart monitors
+      slab(tx, ty, 'Z', '#2b2f3a', '#3a3f4b', '#1c1f27');
+      for (const mx of [2, 9]) {
+        rect(ox + mx, oy + 2, 6, 5, '#101318');
+        for (let i = 0; i < 4; i++) rect(ox + mx + 1 + i, oy + 3 + ((tx + i) % 3), 1, 2, i % 2 ? '#ff5d73' : '#39d98a');
+      }
+      rect(ox + 4, oy + 9, 8, 1, '#4a5160');
+      break;
+    }
+    case 'Q': { // crypto rig / server rack
+      rect(ox + 2, oy, 12, 15, '#1b1d26'); rect(ox + 2, oy, 12, 1, '#2c2f3b');
+      for (let j = 0; j < 4; j++) {
+        rect(ox + 3, oy + 2 + j * 3, 10, 2, '#262a35');
+        px(ox + 4, oy + 2 + j * 3, (tx + j) % 2 ? '#f7931a' : '#39d98a');
+        px(ox + 6, oy + 2 + j * 3, '#5fd0ff');
+      }
+      shadowBelow(ox, oy, 12, 2);
+      break;
+    }
+    case 'H': { // war table with a market map
+      slab(tx, ty, 'H', '#4a1d22', '#6b2a30', '#2e1114');
+      rect(ox + (first('H') ? 3 : 0), oy + 4, T - (first('H') ? 3 : 0) - (!same(tx + 1, ty, 'H') ? 3 : 0), 8, '#1f3b2a');
+      px(ox + 5, oy + 6, '#ff5d73'); px(ox + 11, oy + 9, '#39d98a'); px(ox + 8, oy + 5, '#ffd23f');
+      break;
+    }
+    case 'J': { // sports scoreboard screen
+      const l = first('J'), r = !same(tx + 1, ty, 'J');
+      rect(ox, oy + 1, T, 11, '#141821');
+      rect(ox + (l ? 1 : 0), oy + 2, T - (l ? 1 : 0) - (r ? 1 : 0), 9, '#0b1f24');
+      if (tx % 2 === 0) { text('2', ox + 3, oy + 4, '#5fd8ee'); text('1', ox + 10, oy + 4, '#ffd23f'); }
+      else { rect(ox + 2, oy + 4, 12, 5, '#1d5a2c'); rect(ox + 7, oy + 4, 1, 5, '#d9f2dc'); rect(ox + 2, oy + 4, 12, 1, '#d9f2dc'); }
+      rect(ox, oy + 12, T, 1, '#000000', 0.25);
+      break;
+    }
+    case 'G': { // strategy map table (Grand Hall)
+      slab(tx, ty, 'G', '#6b4a2a', '#8a6238', '#4a321c');
+      rect(ox + (first('G') ? 3 : 0), oy + 4, T - (first('G') ? 3 : 0) - (!same(tx + 1, ty, 'G') ? 3 : 0), 8, '#2d5d8c');
+      rect(ox + 5, oy + 6, 4, 3, '#3c8d4e'); rect(ox + 10, oy + 8, 3, 2, '#3c8d4e');
+      px(ox + 6, oy + 7, '#ff5d73'); px(ox + 11, oy + 8, '#5fd0ff');
+      break;
+    }
     default:
       break;
   }
@@ -602,7 +704,15 @@ const execChair = (tx, ty) => { // tall leather chair; backrest away from the de
 
 const sofaSeat = (tx, ty, dir, ch, body, back) => {
   const ox = tx * T, oy = ty * T;
-  if (dir === 'up') { // backrest below (seat faces up)
+  if (dir === 'down') { // backrest above (seat faces down)
+    const l = !same(tx - 1, ty, ch), r = !same(tx + 1, ty, ch);
+    rect(ox, oy + 4, T, 8, body);
+    rect(ox, oy + 1, T, 4, back);
+    if (l) rect(ox + 1, oy + 1, 3, 12, back);
+    if (r) rect(ox + T - 4, oy + 1, 3, 12, back);
+    rect(ox + (l ? 4 : 0), oy + 10, T - (l ? 4 : 0) - (r ? 4 : 0), 1, shade(body, 0.85));
+    shadowBelow(ox, oy, T - 2);
+  } else if (dir === 'up') { // backrest below (seat faces up)
     const l = !same(tx - 1, ty, ch), r = !same(tx + 1, ty, ch);
     rect(ox, oy + 4, T, 8, body);
     rect(ox, oy + 11, T, 4, back);
@@ -681,11 +791,16 @@ for (let ty = 0; ty < ROWS; ty++) {
     else if (ch === 'q') sofaSeat(tx, ty, 'right', 'q', '#efe3c2', '#c9b27a');
     else if (ch === 'p') sofaSeat(tx, ty, 'left', 'p', '#efe3c2', '#c9b27a');
     else if (ch === 's') sofaSeat(tx, ty, 'up', 's', '#e07a5f', '#b85a42');
+    else if (ch === 't') sofaSeat(tx, ty, 'down', 't', '#e07a5f', '#b85a42');
     else if (ch === 'u') loungeChair(tx, ty);
     else if (FURNITURE.has(ch)) drawFurniture(tx, ty, ch);
   }
 }
 ROOMS.forEach(sign);
+ZONES.forEach(z => {
+  const [x1, y, x2] = z.sign;
+  plate(z.name.toUpperCase(), (x1 * T + (x2 + 1) * T) / 2, y * T + 3, z.color);
+});
 
 // ---------------------------------------------------------------------------
 // PNG encoding (RGBA, nearest-neighbour upscale)

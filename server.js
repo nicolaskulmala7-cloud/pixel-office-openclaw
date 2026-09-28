@@ -119,18 +119,26 @@ const spawnX = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].x : fallback
 const spawnY = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].y : fallback);
 
 const DEFAULT_ROOMS = Array.isArray(OFFICE_LAYOUT.rooms) && OFFICE_LAYOUT.rooms.length ? OFFICE_LAYOUT.rooms : [
-  { id: 1, name: 'Command Center', color: '#c9a227', tiles: rectTiles(7, 11, 12, 13) },
-  { id: 2, name: 'Research Lab', color: '#ec4899', tiles: rectTiles(1, 2, 18, 5) },
-  { id: 3, name: 'Writing Studio', color: '#10b981', tiles: rectTiles(16, 7, 18, 17) },
-  { id: 4, name: 'Review Room', color: '#f59e0b', tiles: rectTiles(1, 7, 3, 17) },
-  { id: 5, name: 'Hangout Room', color: '#8b5cf6', tiles: rectTiles(1, 19, 18, 23) }
+  { id: 1, name: 'Command Center', color: '#c9a227', tiles: rectTiles(15, 11, 20, 13) },
+  { id: 2, name: 'Research Lab', color: '#ec4899', tiles: rectTiles(1, 2, 10, 8) },
+  { id: 3, name: 'Writing Studio', color: '#10b981', tiles: rectTiles(1, 10, 10, 15) },
+  { id: 4, name: 'Review Room', color: '#f59e0b', tiles: rectTiles(1, 17, 10, 23) },
+  { id: 5, name: 'Hangout Room', color: '#8b5cf6', tiles: rectTiles(14, 19, 21, 23) },
+  { id: 6, name: 'Trading Floor', color: '#22c55e', tiles: rectTiles(25, 2, 34, 6) },
+  { id: 7, name: 'Crypto Lab', color: '#f7931a', tiles: rectTiles(25, 8, 34, 12) },
+  { id: 8, name: 'Memecoin War Room', color: '#ef4444', tiles: rectTiles(25, 14, 34, 18) },
+  { id: 9, name: 'Sports Analytics Room', color: '#06b6d4', tiles: rectTiles(25, 20, 34, 23) }
 ];
 
 const DEFAULT_AGENTS = [
-  { id: 'coordinator', name: 'Diktator', role: 'Coordinator', color: 0, x: spawnX('coordinator', 9), y: spawnY('coordinator', 10), room: 'Command Center' },
-  { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, x: spawnX('researcher', 4), y: spawnY('researcher', 21), room: 'Research Lab' },
-  { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, x: spawnX('writer', 13), y: spawnY('writer', 21), room: 'Writing Studio' },
-  { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, x: spawnX('reviewer', 15), y: spawnY('reviewer', 21), room: 'Review Room' }
+  { id: 'coordinator', name: 'Diktator', role: 'Coordinator', color: 0, x: spawnX('coordinator', 17), y: spawnY('coordinator', 10), room: 'Command Center' },
+  { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, x: spawnX('researcher', 16), y: spawnY('researcher', 20), room: 'Research Lab' },
+  { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, x: spawnX('writer', 15), y: spawnY('writer', 22), room: 'Writing Studio' },
+  { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, x: spawnX('reviewer', 16), y: spawnY('reviewer', 22), room: 'Review Room' },
+  { id: 'market_trader', name: 'Trader', role: 'Market Trader (paper)', color: 4, x: spawnX('market_trader', 20), y: spawnY('market_trader', 20), room: 'Trading Floor' },
+  { id: 'crypto_analyst', name: 'Crypto', role: 'Crypto Analyst (paper)', color: 5, x: spawnX('crypto_analyst', 19), y: spawnY('crypto_analyst', 21), room: 'Crypto Lab' },
+  { id: 'memecoin_scout', name: 'Memecoin Scout', role: 'Memecoin Scout (research only)', color: 6, x: spawnX('memecoin_scout', 21), y: spawnY('memecoin_scout', 21), room: 'Memecoin War Room' },
+  { id: 'sports_analyst', name: 'Sports Analyst', role: 'Sports Analyst (paper)', color: 7, x: spawnX('sports_analyst', 20), y: spawnY('sports_analyst', 22), room: 'Sports Analytics Room' }
 ].map(a => ({ ...a, personality: 'Trabajador', state: 'idle', active: true }));
 
 // Salas del demo original (sin tiles); si el mapa guardado solo contiene estas, se reemplaza

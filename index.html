@@ -10,6 +10,7 @@
             padding: 20px;
             background: #2d2d2d;
             display: flex;
+            flex-wrap: wrap; /* mapa ancho (1152px): el panel baja si la ventana es estrecha */
             justify-content: center;
             align-items: flex-start;
             gap: 20px;
@@ -59,7 +60,7 @@
 </head>
 <body>
     <div id="gameContainer">
-        <canvas id="gameCanvas" width="640" height="800"></canvas>
+        <canvas id="gameCanvas" width="1152" height="800"></canvas>
         <div id="ui">
             <div>Time: <span id="timer">0</span>s</div>
         </div>
@@ -185,7 +186,7 @@
         };
 
         const GRID_SIZE = 32;
-        const COLS = 20; // 640/32
+        const COLS = 36; // 1152/32
         const ROWS = 25; // 800/32
         const MAX_IDLE_FRAMES = 60 * 5; // ~5 segundos a 60fps
         // El live sync (servidor) decide dónde está cada agente: sin paseos aleatorios en reposo
@@ -198,17 +199,25 @@
             return tiles;
         };
         const DEFAULT_ROOMS = [
-            { id: 1, name: 'Command Center', tiles: rectTiles(7, 11, 12, 13) },
-            { id: 2, name: 'Research Lab', tiles: rectTiles(1, 2, 18, 5) },
-            { id: 3, name: 'Writing Studio', tiles: rectTiles(16, 7, 18, 17) },
-            { id: 4, name: 'Review Room', tiles: rectTiles(1, 7, 3, 17) },
-            { id: 5, name: 'Hangout Room', tiles: rectTiles(1, 19, 18, 23) }
+            { id: 1, name: 'Command Center', tiles: rectTiles(15, 11, 20, 13) },
+            { id: 2, name: 'Research Lab', tiles: rectTiles(1, 2, 10, 8) },
+            { id: 3, name: 'Writing Studio', tiles: rectTiles(1, 10, 10, 15) },
+            { id: 4, name: 'Review Room', tiles: rectTiles(1, 17, 10, 23) },
+            { id: 5, name: 'Hangout Room', tiles: rectTiles(14, 19, 21, 23) },
+            { id: 6, name: 'Trading Floor', tiles: rectTiles(25, 2, 34, 6) },
+            { id: 7, name: 'Crypto Lab', tiles: rectTiles(25, 8, 34, 12) },
+            { id: 8, name: 'Memecoin War Room', tiles: rectTiles(25, 14, 34, 18) },
+            { id: 9, name: 'Sports Analytics Room', tiles: rectTiles(25, 20, 34, 23) }
         ];
         const DEFAULT_AGENTS = [
             { id: 'coordinator', name: 'Diktator', role: 'Coordinator', color: 0, room: 'Command Center' },
             { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, room: 'Research Lab' },
             { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, room: 'Writing Studio' },
-            { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, room: 'Review Room' }
+            { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, room: 'Review Room' },
+            { id: 'market_trader', name: 'Trader', role: 'Market Trader (paper)', color: 4, room: 'Trading Floor' },
+            { id: 'crypto_analyst', name: 'Crypto', role: 'Crypto Analyst (paper)', color: 5, room: 'Crypto Lab' },
+            { id: 'memecoin_scout', name: 'Memecoin Scout', role: 'Memecoin Scout (research only)', color: 6, room: 'Memecoin War Room' },
+            { id: 'sports_analyst', name: 'Sports Analyst', role: 'Sports Analyst (paper)', color: 7, room: 'Sports Analytics Room' }
         ];
 
         // Colores del log/filtros por índice de sprite
@@ -218,7 +227,9 @@
             { color: '#22c55e', text: '#4ade80' },
             { color: '#818cf8', text: '#a5b4fc' },
             { color: '#ec4899', text: '#f9a8d4' },
-            { color: '#eab308', text: '#fde047' }
+            { color: '#eab308', text: '#fde047' },
+            { color: '#ef4444', text: '#fca5a5' },
+            { color: '#06b6d4', text: '#67e8f9' }
         ];
 
         // Solo tiles pisables (suelo o silla) de una sala
@@ -229,7 +240,7 @@
         }
 
         // Matriz de colisiones (0=Suelo, 1=Pared/Mueble, 2=Puerta, 3=Silla)
-        let default_COLLISION_MAP = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,0,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1],[1,0,1,1,0,0,1,1,0,1,1,0,0,1,1,0,1,1,0,1],[1,0,0,3,0,0,3,0,0,3,0,0,0,0,3,0,3,0,0,1],[1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],[1,1,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,1,1],[1,1,1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,1,1],[1,0,0,0,1,0,1,1,1,1,1,1,1,1,0,1,0,0,0,1],[1,1,1,0,1,0,1,1,1,1,1,1,1,1,0,1,0,1,1,1],[1,3,0,0,1,0,1,1,0,3,1,0,1,1,0,1,0,3,0,1],[1,0,0,0,2,0,2,0,0,1,1,0,0,2,0,2,0,0,0,1],[1,1,1,0,1,0,1,3,0,0,0,0,3,1,0,1,0,1,1,1],[1,1,1,0,1,0,1,3,0,1,1,0,3,1,0,1,0,3,0,1],[1,3,0,0,1,0,1,1,1,0,0,1,1,1,0,1,0,0,0,1],[1,0,0,0,1,0,1,1,1,0,0,1,1,1,0,1,0,0,1,1],[1,1,1,0,1,0,1,1,1,2,2,1,1,1,0,1,0,0,0,1],[1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1],[1,1,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,1,1],[1,1,0,1,1,0,0,0,0,0,0,0,0,1,1,0,1,1,1,1],[1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,3,3,3,3,0,0,0,0,0,0,0,3,1,3,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,1,1],[1,1,0,0,0,0,0,0,3,3,3,3,0,0,0,0,0,0,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]];
+        let default_COLLISION_MAP = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,0,1,1,0,1,1,1,1,1,0,0,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,0,1,1],[1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1],[1,0,1,1,0,0,1,1,0,0,0,1,0,0,1,0,0,1,1,0,0,1,0,0,2,0,1,1,0,0,1,1,0,1,1,1],[1,0,3,0,0,0,3,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,3,0,0,0,3,0,0,3,0,1],[1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,1],[1,0,1,1,0,0,1,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1],[1,0,3,0,0,0,3,0,0,0,0,1,0,0,1,1,1,1,1,1,1,1,0,0,1,1,1,0,1,1,0,0,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1],[1,1,1,0,0,0,0,1,1,1,0,1,0,0,1,1,0,3,1,0,1,1,0,0,2,0,0,1,1,0,0,1,1,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,1,0,0,2,0,0,1,1,0,0,2,0,0,1,0,0,3,0,0,0,3,0,0,0,1],[1,0,1,1,0,0,1,1,0,0,0,2,0,0,1,3,0,0,0,0,3,1,0,0,1,1,0,0,0,0,0,0,0,0,1,1],[1,0,0,3,0,0,0,3,0,0,0,1,0,0,1,3,0,1,1,0,3,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1],[1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,0,0,1,1,1,0,0,1,1,1,1,1,1,1,0,0,0,1,1],[1,1,0,0,0,0,0,0,0,0,1,1,0,0,1,1,1,0,0,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1],[1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,2,2,1,1,1,0,0,2,0,0,1,1,1,1,0,0,0,0,1],[1,1,1,0,0,1,1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,0,0,0,1,1],[1,0,0,0,0,0,0,0,0,0,0,1,0,1,1,1,1,2,2,1,1,1,1,0,1,0,0,0,3,3,0,0,0,0,1,1],[1,0,0,1,1,1,1,0,0,0,0,1,0,1,1,1,0,0,0,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1],[1,0,0,1,1,1,1,0,0,0,0,2,0,1,0,3,3,0,0,0,3,0,2,0,1,1,1,1,1,1,1,0,0,1,1,1],[1,0,0,3,0,0,3,0,0,0,0,1,0,2,0,1,1,0,0,3,1,3,1,0,2,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,3,3,0,0,0,3,0,1,0,1,0,0,1,1,0,0,1,1,0,0,1],[1,1,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,1,0,1,0,0,3,0,0,0,3,0,0,0,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]];
         let COLLISION_MAP = default_COLLISION_MAP;
         try {
             const savedMap = localStorage.getItem('pixel_office_collision');
@@ -427,6 +438,9 @@
                 const spriteSlot = (characterAttr && characterAttr.slot !== undefined) ? characterAttr.slot : 0;
                 const charIndex = spriteSlot % this.sprites.chars.length;
                 const charImg = this.sprites.chars[charIndex];
+                // Solo hay 6 hojas de sprites: los slots extra reutilizan una con otro tono
+                const hueShift = Math.floor(spriteSlot / this.sprites.chars.length) * 150;
+                if (hueShift) ctx.filter = `hue-rotate(${hueShift}deg)`;
 
                 // Dibujar el nuevo sprite (centrado en X, hacia arriba en Y)
                 ctx.drawImage(
@@ -974,9 +988,9 @@
                         const [tx, ty] = key.split(',').map(Number);
                         // Calculamos si la casilla es par o impar para mantener el patrón cuadriculado
                         const isEven = ((tx + ty) % 2) === 0;
-                        // Usamos tiles vacíos del suelo del pasillo (X=5, Y=9/10)
+                        // Usamos tiles vacíos del suelo del pasillo (X=12, Y=9/10)
                         // Esto evita que entren recortes de muros u otros muebles en los bordes
-                        const srcX = 5;
+                        const srcX = 12;
                         const srcY = isEven ? 9 : 10; // plain hallway floor in office-openclaw.png
                         
                         ctx.drawImage(
@@ -1116,11 +1130,8 @@
             const y = (e.clientY - rect.top);
             if (!simulationStarted) return;
             
-            if (window.characters && window.characters.length > 0) {
-                window.characters[0].moveTo(x, y);
-                const act = document.getElementById('currentAction');
-                if(act) act.textContent = 'Manual movement';
-            }
+            // Las posiciones las controla el live sync (servidor); el clic ya no mueve agentes
+            void x; void y;
         });
 
         loadConfig();
