@@ -35,6 +35,7 @@ const AGENT_MAP = [
   { openclaw: 'reviewer', pixel: 'reviewer', slot: 3, name: 'Reviewer', room: 'Review Room' }
 ];
 const COORDINATOR = 'coordinator';
+const HANGOUT_ROOM = 'Hangout Room'; // idle agents rest here
 
 const CLIENT_ID = 'gateway-client';
 const CLIENT_MODE = 'ui';
@@ -200,9 +201,11 @@ const loadCollisionMap = async () => {
 };
 
 // Pick a stable target tile inside the room: prefer chairs (3), then floor (0),
-// nearest to the room's centroid. Without a collision map, nearest tile to centroid.
-const pickRoomTile = (room, collision) => {
-  const tiles = (room && Array.isArray(room.tiles) ? room.tiles : []).filter(t => Number.isInteger(t.x) && Number.isInteger(t.y));
+// nearest to the room's centroid, skipping tiles already taken. Without a collision
+// map, nearest tile to centroid.
+const pickRoomTile = (room, collision, taken = new Set()) => {
+  const tiles = (room && Array.isArray(room.tiles) ? room.tiles : [])
+    .filter(t => Number.isInteger(t.x) && Number.isInteger(t.y) && !taken.has(`${t.x},${t.y}`));
   if (!tiles.length) return null;
   const cx = tiles.reduce((s, t) => s + t.x, 0) / tiles.length;
   const cy = tiles.reduce((s, t) => s + t.y, 0) / tiles.length;
@@ -214,39 +217,72 @@ const pickRoomTile = (room, collision) => {
   return chairs[0] || floor[0] || (collision ? null : tiles.slice().sort(byDist)[0]);
 };
 
+// Explicit targets published by Pixel Office (assets/office-layout.json), validated
+// against the live rooms/collision: a target must be a floor or seat tile inside its room.
+const validTarget = (t, room, collision) => {
+  if (!t || !Number.isInteger(t.x) || !Number.isInteger(t.y) || !room || !Array.isArray(room.tiles)) return false;
+  if (!room.tiles.some(r => r.x === t.x && r.y === t.y)) return false;
+  if (!collision) return true;
+  const cell = collision[t.y] && collision[t.y][t.x];
+  return cell === 0 || cell === 3;
+};
+
 const refreshLayout = async () => {
-  const [config, rooms, collision] = await Promise.all([
+  const [config, rooms, collision, officeLayout] = await Promise.all([
     pixelFetch('/api/config'),
     pixelFetch('/api/rooms'),
-    loadCollisionMap()
+    loadCollisionMap(),
+    pixelFetch('/assets/office-layout.json').catch(() => null)
   ]);
   const agents = (config && Array.isArray(config.agents)) ? config.agents : [];
   const roomList = Array.isArray(rooms) && rooms.length ? rooms : (config.rooms || []);
+  const targets = (officeLayout && typeof officeLayout === 'object' && officeLayout.targets) || {};
+  const idleRoomName = targets.idleRoom || HANGOUT_ROOM;
+  const idleRoom = roomList.find(r => r && r.name === idleRoomName);
+  if (!idleRoom) log(`[pixel] WARNING idle room "${idleRoomName}" not found; idle agents stay in their work rooms`);
+
+  // Distinct idle seats: agent i takes the i-th valid idle target; gaps are filled deterministically.
+  const idleList = (Array.isArray(targets.idle) ? targets.idle : []).filter(t => validTarget(t, idleRoom, collision));
+  const takenIdle = new Set();
+  const idleFor = (index) => {
+    let t = idleList[index];
+    if (t && takenIdle.has(`${t.x},${t.y}`)) t = null;
+    if (!t) t = idleList.find(c => !takenIdle.has(`${c.x},${c.y}`)) || pickRoomTile(idleRoom, collision, takenIdle);
+    if (t) takenIdle.add(`${t.x},${t.y}`);
+    return t ? { x: t.x, y: t.y } : null;
+  };
+
   const layout = new Map();
-  for (const m of AGENT_MAP) {
+  AGENT_MAP.forEach((m, index) => {
     const agent = agents.find(a => a.id === m.pixel) || agents.find(a => a.color === m.slot);
     if (!agent) {
       log(`[pixel] WARNING no Pixel Office agent for ${m.openclaw} (id "${m.pixel}" / slot ${m.slot})`);
-      continue;
+      return;
     }
     if (agent.id !== m.pixel || agent.color !== m.slot) {
       log(`[pixel] WARNING mapping drift for ${m.openclaw}: found id "${agent.id}" slot ${agent.color}`);
     }
     const room = roomList.find(r => r && r.name === m.room);
-    const tile = pickRoomTile(room, collision);
+    const explicit = targets.work && targets.work[m.openclaw];
+    const tile = validTarget(explicit, room, collision) ? { x: explicit.x, y: explicit.y } : pickRoomTile(room, collision);
     if (!tile) log(`[pixel] WARNING no walkable tile found in room "${m.room}" for ${m.openclaw}`);
-    layout.set(m.openclaw, { pixelId: agent.id, name: agent.name, slot: agent.color, room: m.room, tile });
-  }
+    const idleTile = idleRoom ? idleFor(index) : null;
+    layout.set(m.openclaw, {
+      pixelId: agent.id, name: agent.name, slot: agent.color, room: m.room, tile,
+      idleRoom: idleTile ? idleRoomName : m.room, idleTile: idleTile || tile
+    });
+  });
   const changed = JSON.stringify([...layout]) !== JSON.stringify([...pixel.layout]);
   pixel.layout = layout;
   pixel.layoutLoadedAt = Date.now();
   if (changed) {
+    const fmt = (t) => (t ? `(${t.x},${t.y})` : 'none');
     for (const [oc, l] of layout) {
-      const where = l.tile ? `tile (${l.tile.x},${l.tile.y})` : 'no tile';
-      log(`[pixel] map ${oc} -> Pixel Office "${l.pixelId}" slot ${l.slot} "${l.name}" -> ${l.room} ${where}`);
+      log(`[pixel] map ${oc} -> Pixel Office "${l.pixelId}" slot ${l.slot} "${l.name}": work ${l.room} ${fmt(l.tile)}, idle ${l.idleRoom} ${fmt(l.idleTile)}`);
     }
     if (!collision) log('[pixel] WARNING collision map unavailable; using unfiltered room tiles');
   }
+  return changed;
 };
 
 // ---------------------------------------------------------------------------
@@ -256,7 +292,6 @@ const refreshLayout = async () => {
 const sessions = new Map();
 const desired = new Map();  // openclawId -> { state, label }
 const applied = new Map();  // openclawId -> { state, label }; cleared when Pixel Office drops
-const wasWorking = new Map(); // openclawId -> last state successfully pushed (survives Pixel Office drops)
 const idleTimers = new Map();
 
 const agentIdFromKey = (key) => {
@@ -376,38 +411,29 @@ const applyActiveSnapshot = (list) => {
 // ---------------------------------------------------------------------------
 // Push state into Pixel Office
 
+// Where an agent should be for a target state: work tile when working, its own lounge seat when idle.
+const targetTile = (layout, target) => (target.state === 'working' ? layout.tile : layout.idleTile);
+const tileCenterPx = (t) => ({ x: t.x * TILE + TILE / 2, y: t.y * TILE + TILE / 2 });
+
 const pushAgent = async (id, { force = false } = {}) => {
   const target = desired.get(id);
   const layout = pixel.layout.get(id);
   if (!target || !layout) return;
   if (!force && sameTarget(applied.get(id), target)) return;
   const pid = encodeURIComponent(layout.pixelId);
+  const tile = targetTile(layout, target);
   try {
-    if (target.state === 'working') {
-      const body = { state: 'working' };
-      if (layout.tile) {
-        body.x = layout.tile.x * TILE + TILE / 2;
-        body.y = layout.tile.y * TILE + TILE / 2;
-      }
-      await pixelPost(`/api/agent/${pid}/move`, body);
-      if (layout.tile) {
-        await pixelPost(`/api/agent/${pid}/command`, {
-          action: 'move', tileX: layout.tile.x, tileY: layout.tile.y, msg: target.label, source: 'openclaw-sync'
-        });
-      }
-    } else {
-      await pixelPost(`/api/agent/${pid}/move`, { state: 'idle' });
-      // Release the sprite back to autonomous wandering only if this bridge put it to work,
-      // so other automations' commands aren't interrupted on startup.
-      const prev = applied.get(id) || wasWorking.get(id);
-      if (prev && prev.state === 'working') {
-        await pixelPost(`/api/agent/${pid}/command`, { action: 'idle', source: 'openclaw-sync' });
-      }
+    // Server-side target (every Pixel Office client walks there) + a one-shot command for an immediate move/bubble.
+    await pixelPost(`/api/agent/${pid}/move`, { state: target.state, ...(tile ? tileCenterPx(tile) : {}) });
+    if (tile) {
+      await pixelPost(`/api/agent/${pid}/command`, {
+        action: 'move', tileX: tile.x, tileY: tile.y, msg: target.label, source: 'openclaw-sync'
+      });
     }
-    wasWorking.set(id, { state: target.state });
     applied.set(id, { ...target });
     markPixelReachable(true);
-    log(`[sync] ${id} -> ${target.state}${target.label ? ` (${target.label})` : ''}${target.state === 'working' ? ` @ ${layout.room}` : ''}`);
+    const where = target.state === 'working' ? layout.room : layout.idleRoom;
+    log(`[sync] ${id} -> ${target.state}${target.label ? ` (${target.label})` : ''} @ ${where}${tile ? ` (${tile.x},${tile.y})` : ''}`);
   } catch (e) {
     markPixelReachable(false, e);
   }
@@ -425,21 +451,25 @@ const markPixelReachable = (ok, err) => {
 };
 
 // Periodic Pixel Office reconciliation: layout refresh, restart recovery and
-// re-asserting `state` if a browser's 5s config save overwrote it.
+// re-asserting state/position if anything else changed them.
 const pixelReconcile = async () => {
   try {
     const wasReachable = pixel.reachable;
-    if (!wasReachable || Date.now() - pixel.layoutLoadedAt > LAYOUT_REFRESH_MS) await refreshLayout();
+    let layoutChanged = false;
+    if (!wasReachable || Date.now() - pixel.layoutLoadedAt > LAYOUT_REFRESH_MS) layoutChanged = await refreshLayout();
     const config = await pixelFetch('/api/config');
     markPixelReachable(true);
     for (const [id, target] of desired) {
       const layout = pixel.layout.get(id);
       if (!layout) continue;
       const agent = (config.agents || []).find(a => a.id === layout.pixelId);
-      if (!wasReachable || !applied.has(id)) {
+      const tile = targetTile(layout, target);
+      const want = tile ? tileCenterPx(tile) : null;
+      const drifted = agent && (agent.state !== target.state || (want && (agent.x !== want.x || agent.y !== want.y)));
+      if (!wasReachable || layoutChanged || !applied.has(id)) {
         await pushAgent(id, { force: true });
-      } else if (agent && agent.state !== target.state) {
-        await pixelPost(`/api/agent/${encodeURIComponent(layout.pixelId)}/move`, { state: target.state });
+      } else if (drifted) {
+        await pixelPost(`/api/agent/${encodeURIComponent(layout.pixelId)}/move`, { state: target.state, ...(want || {}) });
       }
     }
   } catch (e) {

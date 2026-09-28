@@ -188,6 +188,8 @@
         const COLS = 20; // 640/32
         const ROWS = 25; // 800/32
         const MAX_IDLE_FRAMES = 60 * 5; // ~5 segundos a 60fps
+        // El live sync (servidor) decide dónde está cada agente: sin paseos aleatorios en reposo
+        const IDLE_WANDER = false;
 
         // Equipo OpenClaw por defecto (se usa si el servidor no responde; el servidor es la fuente real)
         const rectTiles = (x1, y1, x2, y2) => {
@@ -196,10 +198,11 @@
             return tiles;
         };
         const DEFAULT_ROOMS = [
-            { id: 1, name: 'Command Center', tiles: rectTiles(1, 2, 9, 8) },
-            { id: 2, name: 'Research Lab', tiles: rectTiles(11, 2, 18, 8) },
-            { id: 3, name: 'Writing Studio', tiles: rectTiles(1, 14, 9, 23) },
-            { id: 4, name: 'Review Room', tiles: rectTiles(11, 14, 18, 23) }
+            { id: 1, name: 'Command Center', tiles: rectTiles(7, 11, 12, 13) },
+            { id: 2, name: 'Research Lab', tiles: rectTiles(1, 2, 18, 5) },
+            { id: 3, name: 'Writing Studio', tiles: rectTiles(16, 7, 18, 17) },
+            { id: 4, name: 'Review Room', tiles: rectTiles(1, 7, 3, 17) },
+            { id: 5, name: 'Hangout Room', tiles: rectTiles(1, 19, 18, 23) }
         ];
         const DEFAULT_AGENTS = [
             { id: 'coordinator', name: 'Chief of Staff', role: 'Coordinator', color: 0, room: 'Command Center' },
@@ -226,7 +229,7 @@
         }
 
         // Matriz de colisiones (0=Suelo, 1=Pared/Mueble, 2=Puerta, 3=Silla)
-        let default_COLLISION_MAP = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1],[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],[1,0,0,0,3,0,3,0,0,0,1,0,1,1,0,0,1,1,0,1],[1,0,0,1,1,1,1,1,0,0,1,0,3,0,0,0,0,3,0,1],[1,0,0,1,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,1],[1,0,0,0,3,0,3,0,0,0,1,0,1,1,0,0,1,1,0,1],[1,1,0,0,0,0,0,0,0,1,1,0,3,0,0,0,0,3,0,1],[1,1,1,1,1,2,1,1,1,1,1,1,1,1,2,1,1,1,1,1],[1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],[1,1,1,1,1,2,1,1,1,1,1,1,1,1,2,1,1,1,1,1],[1,1,1,0,0,0,0,0,1,1,1,1,1,0,0,1,1,0,1,1],[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],[1,0,1,1,0,0,1,1,0,0,1,0,0,3,0,0,3,0,0,1],[1,0,0,3,0,0,3,0,0,0,1,0,0,1,1,1,1,0,0,1],[1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,0,0,1],[1,0,0,0,0,0,0,0,0,0,1,0,0,3,0,0,3,0,0,1],[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,1,1],[1,1,0,1,1,1,0,0,0,1,1,0,3,0,0,0,0,0,1,1],[1,1,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]];
+        let default_COLLISION_MAP = [[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,0,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1],[1,0,1,1,0,0,1,1,0,1,1,0,0,1,1,0,1,1,0,1],[1,0,0,3,0,0,3,0,0,3,0,0,0,0,3,0,3,0,0,1],[1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1],[1,1,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,1,1],[1,1,1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,1,1],[1,0,0,0,1,0,1,1,1,1,1,1,1,1,0,1,0,0,0,1],[1,1,1,0,1,0,1,1,1,1,1,1,1,1,0,1,0,1,1,1],[1,3,0,0,1,0,1,1,0,3,1,0,1,1,0,1,0,3,0,1],[1,0,0,0,2,0,2,0,0,1,1,0,0,2,0,2,0,0,0,1],[1,1,1,0,1,0,1,3,0,0,0,0,3,1,0,1,0,1,1,1],[1,1,1,0,1,0,1,3,0,1,1,0,3,1,0,1,0,3,0,1],[1,3,0,0,1,0,1,1,1,0,0,1,1,1,0,1,0,0,0,1],[1,0,0,0,1,0,1,1,1,0,0,1,1,1,0,1,0,0,1,1],[1,1,1,0,1,0,1,1,1,2,2,1,1,1,0,1,0,0,0,1],[1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1],[1,1,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,1,1],[1,1,0,1,1,0,0,0,0,0,0,0,0,1,1,0,1,1,1,1],[1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],[1,0,3,3,3,3,0,0,0,0,0,0,0,3,1,3,0,0,0,1],[1,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,1,1],[1,1,0,0,0,0,0,0,3,3,3,3,0,0,0,0,0,0,1,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]];
         let COLLISION_MAP = default_COLLISION_MAP;
         try {
             const savedMap = localStorage.getItem('pixel_office_collision');
@@ -484,7 +487,7 @@
                 this.frame++;
                 this.actionTimer++;
 
-                if (!this.isWaiting) {
+                if (IDLE_WANDER && !this.isWaiting) {
                     const allowLongSit = false; // (antes: excepción del agente demo con id 1)
                     const staticAction = this.action !== ACTIONS.WALKING && (!this.sitting || !allowLongSit);
                     if (staticAction && this.actionTimer > MAX_IDLE_FRAMES) {
@@ -582,42 +585,7 @@
                                     }
                                 }
                                 
-                                this.action = ACTIONS.SITTING;
-                                this.sitting = true;
-                                this.actionTimer = 0;
-                                // Sentado un buen rato
-                                this.nextActionTime = 500 + Math.random() * 500;
-                                
-                                // Mirar hacia la mesa dependiendo de dónde estamos:
-                                // Escaneamos un radio de 2 tiles para encontrar el obstáculo (mesa) más cercano
-                                let deskDir = null;
-                                let minDeskDist = Infinity;
-                                for(let dy = -2; dy <= 2; dy++) {
-                                    for(let dx = -2; dx <= 2; dx++) {
-                                        if (dx===0 && dy===0) continue;
-                                        let checkY = targetTile.y + dy;
-                                        let checkX = targetTile.x + dx;
-                                        if(checkY >= 0 && checkY < ROWS && checkX >= 0 && checkX < COLS) {
-                                            if (COLLISION_MAP[checkY][checkX] === 1) {
-                                                let dist = Math.abs(dx) + Math.abs(dy);
-                                                if (dist < minDeskDist || (dist === minDeskDist && dy > 0 && Math.abs(dy) > Math.abs(dx))) {
-                                                    minDeskDist = dist;
-                                                    if (Math.abs(dy) >= Math.abs(dx)) {
-                                                        deskDir = dy < 0 ? 'up' : 'down';
-                                                    } else {
-                                                        deskDir = dx < 0 ? 'left' : 'right';
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                if (deskDir) {
-                                    this.facing = deskDir;
-                                } else {
-                                    this.facing = 'up'; // Por defecto la mayoría de sillas miran hacia arriba
-                                }
+                                this.sitAt(targetTile.x, targetTile.y);
                             } else {
                                 this.action = ACTIONS.IDLE;
                                 this.actionTimer = 0;
@@ -642,8 +610,8 @@
                            this.action === ACTIONS.DRINKING ||
                            this.action === ACTIONS.PHONE ||
                            this.action === ACTIONS.SITTING) {
-                    // Acciones estáticas
-                    if (this.actionTimer > this.nextActionTime + 150 && !this.isWaiting) {
+                    // Acciones estáticas (sin paseos, quien está sentado sigue sentado)
+                    if (this.actionTimer > this.nextActionTime + 150 && !this.isWaiting && (IDLE_WANDER || !this.sitting)) {
                         this.action = ACTIONS.IDLE;
                         this.sitting = false;
                         this.actionTimer = 0;
@@ -692,7 +660,13 @@
                         if (moved < 0.5) {
                             this.stuckTimer++;
                             if (this.stuckTimer > 150) {
-                                this.moveToRandomPosition();
+                                if (IDLE_WANDER) this.moveToRandomPosition();
+                                else if (this.targetTileX !== null && this.targetTileY !== null) {
+                                    this.moveTo(this.targetTileX * GRID_SIZE + GRID_SIZE / 2, this.targetTileY * GRID_SIZE + GRID_SIZE / 2);
+                                } else {
+                                    this.action = ACTIONS.IDLE;
+                                    this.path = [];
+                                }
                                 this.stuckTimer = 0;
                             }
                         } else {
@@ -708,7 +682,56 @@
                 }
             }
 
+            // Sentarse en la silla (tx, ty) mirando hacia la mesa más cercana
+            sitAt(tx, ty) {
+                const targetTile = { x: tx, y: ty };
+                this.action = ACTIONS.SITTING;
+                this.sitting = true;
+                this.actionTimer = 0;
+                // Sentado un buen rato
+                this.nextActionTime = 500 + Math.random() * 500;
+                
+                // Mirar hacia la mesa dependiendo de dónde estamos:
+                // Escaneamos un radio de 2 tiles para encontrar el obstáculo (mesa) más cercano
+                let deskDir = null;
+                let minDeskDist = Infinity;
+                for(let dy = -2; dy <= 2; dy++) {
+                    for(let dx = -2; dx <= 2; dx++) {
+                        if (dx===0 && dy===0) continue;
+                        let checkY = targetTile.y + dy;
+                        let checkX = targetTile.x + dx;
+                        if(checkY >= 0 && checkY < ROWS && checkX >= 0 && checkX < COLS) {
+                            if (COLLISION_MAP[checkY][checkX] === 1) {
+                                let dist = Math.abs(dx) + Math.abs(dy);
+                                if (dist < minDeskDist || (dist === minDeskDist && dy > 0 && Math.abs(dy) > Math.abs(dx))) {
+                                    minDeskDist = dist;
+                                    if (Math.abs(dy) >= Math.abs(dx)) {
+                                        deskDir = dy < 0 ? 'up' : 'down';
+                                    } else {
+                                        deskDir = dx < 0 ? 'left' : 'right';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (deskDir) {
+                    this.facing = deskDir;
+                } else {
+                    this.facing = 'up'; // Por defecto la mayoría de sillas miran hacia arriba
+                }
+            }
+
             chooseRandomAction() {
+                if (!IDLE_WANDER) {
+                    // Animaciones en el sitio, nunca caminar al azar
+                    const inPlace = [ACTIONS.IDLE, ACTIONS.DRINKING, ACTIONS.READING, ACTIONS.PHONE];
+                    this.action = inPlace[Math.floor(Math.random() * inPlace.length)];
+                    this.actionTimer = 0;
+                    this.nextActionTime = 200 + Math.random() * 300;
+                    return;
+                }
                 const actions = [
                     ACTIONS.WALKING,
                     ACTIONS.WORKING,
@@ -951,10 +974,10 @@
                         const [tx, ty] = key.split(',').map(Number);
                         // Calculamos si la casilla es par o impar para mantener el patrón cuadriculado
                         const isEven = ((tx + ty) % 2) === 0;
-                        // Usamos tiles vacíos del suelo del pasillo (X=4/5, Y=11)
+                        // Usamos tiles vacíos del suelo del pasillo (X=5, Y=9/10)
                         // Esto evita que entren recortes de muros u otros muebles en los bordes
-                        const srcX = isEven ? 4 : 5;
-                        const srcY = 11; // plain hallway floor in office-openclaw.png
+                        const srcX = 5;
+                        const srcY = isEven ? 9 : 10; // plain hallway floor in office-openclaw.png
                         
                         ctx.drawImage(
                             spriteManager.sprites.background,
@@ -1054,8 +1077,10 @@
             char.personality = agentConfig.personality || "Trabajador";
 
             // Use server position (if it is still walkable on the current map), else a tile in the default room, else random
-            const savedTileWalkable = (agentConfig.x !== undefined && agentConfig.y !== undefined) &&
-                COLLISION_MAP[Math.floor(agentConfig.y / GRID_SIZE)]?.[Math.floor(agentConfig.x / GRID_SIZE)] === 0;
+            const savedCell = (agentConfig.x !== undefined && agentConfig.y !== undefined)
+                ? COLLISION_MAP[Math.floor(agentConfig.y / GRID_SIZE)]?.[Math.floor(agentConfig.x / GRID_SIZE)]
+                : undefined;
+            const savedTileWalkable = savedCell === 0 || savedCell === 3;
             if (savedTileWalkable) {
                 char.x = agentConfig.x;
                 char.y = agentConfig.y;
@@ -1070,6 +1095,11 @@
             }
             char.targetX = char.x;
             char.targetY = char.y;
+            // Posición indicada por el servidor (live sync); se sigue cuando cambia
+            char.serverTarget = savedTileWalkable ? `${agentConfig.x},${agentConfig.y}` : null;
+            const spawnTileX = Math.floor(char.x / GRID_SIZE);
+            const spawnTileY = Math.floor(char.y / GRID_SIZE);
+            if (COLLISION_MAP[spawnTileY]?.[spawnTileX] === 3) char.sitAt(spawnTileX, spawnTileY);
             return char;
         }
 
@@ -1511,37 +1541,34 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
             });
         });
 
-        // Guardar estado en SERVIDOR cada 5 segundos (compartido para todos)
-        setInterval(async () => {
-            if (typeof characters !== 'undefined' && characters.length > 0) {
-                try {
-                    // Get current config from server
-                    const response = await fetch('/api/config');
-                    const config = await response.json();
-                    
-                    // Update positions
-                    characters.forEach(char => {
-                        let agent = config.agents.find(a => a.id === char.id);
-                        if (agent) {
-                            agent.x = char.x;
-                            agent.y = char.y;
-                        }
-                    });
-                    
-                    // Save back to server
-                    await fetch('/api/config', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(config)
-                    });
-                } catch(e) {}
-            }
-        }, 5000);
-
-        // NOTA: Eliminado el polling de sincronización de posiciones desde servidor
-        // porque causaba "teletransporte" de personajes entre clientes.
-        // Cada cliente mantiene su propia simulación local.
-        // Las posiciones se guardan en servidor pero no se fuerzan desde él.
+        // Seguir la posición objetivo que marca el servidor (live sync OpenClaw).
+        // El servidor es la única fuente: los clientes ya no guardan posiciones, solo
+        // caminan (con pathfinding) hacia el nuevo objetivo cuando cambia.
+        async function followServerTargets() {
+            if (typeof characters === 'undefined' || characters.length === 0) return;
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+                characters.forEach(char => {
+                    const agent = (config.agents || []).find(a => a.id === char.id);
+                    if (!agent || agent.x === undefined || agent.y === undefined) return;
+                    const key = `${agent.x},${agent.y}`;
+                    if (key === char.serverTarget) return;
+                    char.serverTarget = key;
+                    const tx = Math.floor(agent.x / GRID_SIZE);
+                    const ty = Math.floor(agent.y / GRID_SIZE);
+                    const cell = COLLISION_MAP[ty]?.[tx];
+                    if (cell !== 0 && cell !== 3) return; // objetivo no válido en este mapa
+                    const atTarget = Math.floor(char.x / GRID_SIZE) === tx && Math.floor(char.y / GRID_SIZE) === ty;
+                    if (atTarget) {
+                        if (cell === 3 && !char.sitting) char.sitAt(tx, ty);
+                    } else {
+                        char.moveTo(tx * GRID_SIZE + GRID_SIZE / 2, ty * GRID_SIZE + GRID_SIZE / 2);
+                    }
+                });
+            } catch (e) {}
+        }
+        setInterval(followServerTargets, 2000);
 
         // Cargar mensajes de agentes desde API (como burbujas temporales)
         let lastAgentMessages = {};

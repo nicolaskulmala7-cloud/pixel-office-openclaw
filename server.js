@@ -119,17 +119,18 @@ const spawnX = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].x : fallback
 const spawnY = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].y : fallback);
 
 const DEFAULT_ROOMS = Array.isArray(OFFICE_LAYOUT.rooms) && OFFICE_LAYOUT.rooms.length ? OFFICE_LAYOUT.rooms : [
-  { id: 1, name: 'Command Center', color: '#3b82f6', tiles: rectTiles(1, 2, 9, 8) },
-  { id: 2, name: 'Research Lab', color: '#ec4899', tiles: rectTiles(11, 2, 18, 8) },
-  { id: 3, name: 'Writing Studio', color: '#10b981', tiles: rectTiles(1, 14, 9, 23) },
-  { id: 4, name: 'Review Room', color: '#f59e0b', tiles: rectTiles(11, 14, 18, 23) }
+  { id: 1, name: 'Command Center', color: '#c9a227', tiles: rectTiles(7, 11, 12, 13) },
+  { id: 2, name: 'Research Lab', color: '#ec4899', tiles: rectTiles(1, 2, 18, 5) },
+  { id: 3, name: 'Writing Studio', color: '#10b981', tiles: rectTiles(16, 7, 18, 17) },
+  { id: 4, name: 'Review Room', color: '#f59e0b', tiles: rectTiles(1, 7, 3, 17) },
+  { id: 5, name: 'Hangout Room', color: '#8b5cf6', tiles: rectTiles(1, 19, 18, 23) }
 ];
 
 const DEFAULT_AGENTS = [
-  { id: 'coordinator', name: 'Chief of Staff', role: 'Coordinator', color: 0, x: spawnX('coordinator', 5), y: spawnY('coordinator', 3), room: 'Command Center' },
-  { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, x: spawnX('researcher', 14), y: spawnY('researcher', 6), room: 'Research Lab' },
-  { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, x: spawnX('writer', 5), y: spawnY('writer', 18), room: 'Writing Studio' },
-  { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, x: spawnX('reviewer', 14), y: spawnY('reviewer', 20), room: 'Review Room' }
+  { id: 'coordinator', name: 'Chief of Staff', role: 'Coordinator', color: 0, x: spawnX('coordinator', 3), y: spawnY('coordinator', 21), room: 'Command Center' },
+  { id: 'researcher', name: 'Researcher', role: 'Research Analyst', color: 1, x: spawnX('researcher', 4), y: spawnY('researcher', 21), room: 'Research Lab' },
+  { id: 'writer', name: 'Writer', role: 'Content Writer', color: 2, x: spawnX('writer', 13), y: spawnY('writer', 21), room: 'Writing Studio' },
+  { id: 'reviewer', name: 'Reviewer', role: 'Quality Reviewer', color: 3, x: spawnX('reviewer', 15), y: spawnY('reviewer', 21), room: 'Review Room' }
 ].map(a => ({ ...a, personality: 'Trabajador', state: 'idle', active: true }));
 
 // Salas del demo original (sin tiles); si el mapa guardado solo contiene estas, se reemplaza
@@ -257,11 +258,23 @@ app.post('/api/auth/login', (req, res) => {
   return res.status(401).json({ success: false });
 });
 
+// Posición y estado de los agentes los controla /api/agent/:id/move (live sync);
+// un guardado de configuración no los sobrescribe.
+const LIVE_FIELDS = ['x', 'y', 'state'];
+const roomsHaveTiles = (rooms) => Array.isArray(rooms) && rooms.some(r => r && Array.isArray(r.tiles) && r.tiles.length);
+
 app.post('/api/config', (req, res) => {
+  const previous = config;
   config = req.body || {};
-  config.agents = normalizeAgents(config.agents);
-  if (!Array.isArray(config.rooms)) {
-    config.rooms = clone(DEFAULT_ROOMS);
+  config.agents = normalizeAgents(config.agents).map(agent => {
+    const current = (previous.agents || []).find(a => a.id === agent.id);
+    if (!current) return agent;
+    const live = {};
+    LIVE_FIELDS.forEach(k => { if (current[k] !== undefined) live[k] = current[k]; });
+    return { ...agent, ...live };
+  });
+  if (!roomsHaveTiles(config.rooms)) {
+    config.rooms = roomsHaveTiles(previous.rooms) ? previous.rooms : clone(DEFAULT_ROOMS);
   }
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
   persistAgents(config.agents);
@@ -278,6 +291,7 @@ app.post('/api/agent/:id/move', (req, res) => {
     if (x !== undefined) agent.x = x;
     if (y !== undefined) agent.y = y;
     if (state) agent.state = state;
+    persistAgents(config.agents);
     console.log(`[${agent.name}] Mover a (${x}, ${y})`);
     res.json({ success: true, agent });
   } else {
