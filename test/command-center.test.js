@@ -136,3 +136,12 @@ test('command-center.js is served; the data dir and tools are not', async (t) =>
     assert.ok(!/createActivity|createBusinessBridge|"schema_version"/.test(body), `${p} not leaked`);
   }
 });
+
+test('SYSTEM CREATED plaque: first plaque, shows the display date only when unlocked, marked historical', () => {
+  const ach = [{ id: 'system_created', title: 'SYSTEM CREATED', category: 'historical', display_date: '28.09.2026', unlocked: true, unlocked_at: '2026-09-28T00:00:00+02:00' }, { id: 'first_sale', title: 'FIRST SALE', category: 'business', display_date: null, unlocked: false }];
+  const [p0, p1] = CC.plaquesModel([{ x: 1, y: 1 }, { x: 2, y: 1 }], ach);
+  assert.deepEqual([p0.id, p0.unlocked, p0.display_date, p0.category], ['system_created', true, '28.09.2026', 'historical']);
+  assert.deepEqual([p1.unlocked, p1.display_date], [false, null]);
+  const s = sanitise({ achievements: ach });
+  assert.deepEqual([s.achievements[0].display_date, s.achievements[0].category], ['28.09.2026', 'historical']);
+});

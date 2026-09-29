@@ -30,4 +30,21 @@ async function fetchFullResult(rpc, task) {
   }
 }
 
-module.exports = { finalAssistantText, fetchFullResult, MAX_RESULT_CHARS };
+// Business OS event type per agent. Subagents inherit their parent's type from the
+// generated layout (so a scout's findings are research, filed under its parent's folder).
+const RESEARCH_AGENTS = ['researcher', 'market_trader', 'crypto_analyst', 'memecoin_scout', 'sports_analyst'];
+function durableEventType(task, layout = null) {
+  if (task.status !== 'completed') return 'task_failed';
+  const parentOf = (id) => {
+    const a = layout && Array.isArray(layout.agents) ? layout.agents.find((x) => x.id === id) : null;
+    return a && a.parent ? a.parent : null;
+  };
+  const id = RESEARCH_AGENTS.includes(task.agentId) ? task.agentId : (parentOf(task.agentId) || task.agentId);
+  if (RESEARCH_AGENTS.includes(id)) return 'research_completed';
+  if (id === 'reviewer') return 'review_completed';
+  if (id === 'operations') return 'system_report'; // operational reports, never research
+  if (id === 'writer' || id === 'coordinator') return 'report_completed';
+  return 'task_completed';
+}
+
+module.exports = { finalAssistantText, fetchFullResult, durableEventType, RESEARCH_AGENTS, MAX_RESULT_CHARS };

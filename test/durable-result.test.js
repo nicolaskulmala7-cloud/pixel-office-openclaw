@@ -46,3 +46,17 @@ test('durable-result.js is not served over HTTP', async (t) => {
   const body = await (await fetch(srv.base + '/durable-result.js')).text();
   assert.doesNotMatch(body, /fetchFullResult/);
 });
+
+test('event types: core agents unchanged; subagents inherit their parent type from the layout', () => {
+  const { durableEventType } = require('../durable-result');
+  const L = require('../assets/office-layout.json');
+  const t = (agentId, status = 'completed') => durableEventType({ agentId, status }, L);
+  assert.deepEqual(['researcher', 'market_trader', 'reviewer', 'operations', 'writer', 'coordinator'].map((a) => t(a)),
+    ['research_completed', 'research_completed', 'review_completed', 'system_report', 'report_completed', 'report_completed']);
+  for (const sub of ['equities_scout', 'macro_scout', 'crypto_trader', 'onchain_scout', 'sentiment_scout', 'sports_bettor', 'odds_scout']) {
+    assert.equal(t(sub), 'research_completed', sub);
+  }
+  assert.equal(t('odds_scout', 'failed'), 'task_failed');
+  assert.equal(durableEventType({ agentId: 'unknown_x', status: 'completed' }, L), 'task_completed');
+  assert.equal(durableEventType({ agentId: 'odds_scout', status: 'completed' }, null), 'task_completed', 'no layout -> safe default');
+});

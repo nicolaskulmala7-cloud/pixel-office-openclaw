@@ -16,7 +16,7 @@
 'use strict';
 
 const fs = require('fs');
-const { fetchFullResult } = require('./durable-result');
+const { fetchFullResult, durableEventType: durableEventTypeFor } = require('./durable-result');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
@@ -447,19 +447,10 @@ const isoTime = (value) => {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString();
 };
 
-const durableEventType = (task) => {
-  if (task.status !== 'completed') return 'task_failed';
-
-  if (['researcher', 'market_trader', 'crypto_analyst', 'memecoin_scout', 'sports_analyst'].includes(task.agentId)) {
-    return 'research_completed';
-  }
-
-  if (task.agentId === 'reviewer') return 'review_completed';
-  if (task.agentId === 'operations') return 'system_report'; // operational reports, never research
-  if (task.agentId === 'writer' || task.agentId === 'coordinator') return 'report_completed';
-
-  return 'task_completed';
-};
+// Event type per agent (subagents inherit their parent's type from the layout).
+let durableLayout = null;
+try { durableLayout = JSON.parse(fs.readFileSync(path.join(__dirname, 'assets', 'office-layout.json'), 'utf8')); } catch { /* core agents still map */ }
+const durableEventType = (task) => durableEventTypeFor(task, durableLayout);
 
 const emitDurableTask = async (task) => {
   if (!task || !DURABLE_TERMINAL_STATUSES.has(task.status)) return;

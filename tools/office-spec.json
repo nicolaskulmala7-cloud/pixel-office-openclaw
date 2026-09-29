@@ -17,7 +17,7 @@
     },
     "achievement_hall": {
       "name": "Achievement Hall", "label": "ACHIEVEMENT HALL", "color": "#e0b83a", "floor": "marble",
-      "template": ["UUUUUUUUUUUUU", ".I.........I.", ".....GG......", "............."]
+      "template": ["UUUUUUUUUUUUUU", ".I..........I.", "......GG......", ".............."]
     },
     "research_lab": {
       "name": "Research Lab", "color": "#ec4899", "floor": "lab",

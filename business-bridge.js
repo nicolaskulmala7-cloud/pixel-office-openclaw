@@ -42,7 +42,7 @@ function sanitise(raw) {
     mode: { summary: clip(raw.mode && raw.mode.summary, 40) || 'UNKNOWN' },
     services: Object.fromEntries(Object.entries(raw.services || {}).slice(0, 10).map(([k, v]) => [clip(k, 40), clip(v, 20)])),
     level: { level: num(lvl.level), net_eur: num(lvl.net_eur), current_threshold_eur: num(lvl.current_threshold_eur), next_level: num(lvl.next_level), next_threshold_eur: num(lvl.next_threshold_eur), progress: num(lvl.progress), events_counted: num(lvl.events_counted) },
-    achievements: (raw.achievements || []).slice(0, 50).map((a) => ({ id: clip(a.id, 40), title: clip(a.title, 60), unlocked: a.unlocked === true, unlocked_at: clip(a.unlocked_at, 40) || null })),
+    achievements: (raw.achievements || []).slice(0, 50).map((a) => ({ id: clip(a.id, 40), title: clip(a.title, 60), category: clip(a.category, 20) || 'business', display_date: clip(a.display_date, 20) || null, unlocked: a.unlocked === true, unlocked_at: clip(a.unlocked_at, 40) || null })),
     leaderboards: { paper: board(raw.leaderboards && raw.leaderboards.paper), real: board(raw.leaderboards && raw.leaderboards.real) },
     agents: (raw.agents || []).slice(0, 64).map((a) => ({ id: clip(a.id, 40), display: clip(a.display, 60), room: clip(a.room, 60), parent: a.parent ? clip(a.parent, 40) : null, status: clip(a.status, 20), model: clip(a.model, 40), tier: clip(a.tier, 20) })),
     usage: { claude: usage(raw.usage && raw.usage.claude), codex: usage(raw.usage && raw.usage.codex), chatgpt: usage(raw.usage && raw.usage.chatgpt) },

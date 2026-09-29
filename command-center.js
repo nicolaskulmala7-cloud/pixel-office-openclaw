@@ -85,7 +85,7 @@
   function plaquesModel(plaques = [], achievements = []) {
     return plaques.map((p, i) => {
       const a = achievements[i];
-      return { x: p.x, y: p.y, id: a ? a.id : null, title: a ? a.title : 'Empty plaque', unlocked: !!(a && a.unlocked === true), unlocked_at: a ? a.unlocked_at : null };
+      return { x: p.x, y: p.y, id: a ? a.id : null, title: a ? a.title : 'Empty plaque', category: a && a.category ? a.category : null, unlocked: !!(a && a.unlocked === true), unlocked_at: a ? a.unlocked_at : null, display_date: a && a.unlocked === true && a.display_date ? a.display_date : null };
     });
   }
 
@@ -200,7 +200,7 @@
         const n = plaqueNodes[i].node;
         n.className = 'cc-plaque' + (pm.unlocked ? ' unlocked' : '');
         n.textContent = pm.unlocked ? '★' : '';
-        n.title = (pm.unlocked ? 'Unlocked: ' : 'Locked: ') + pm.title + (pm.unlocked_at ? ' (' + pm.unlocked_at.slice(0, 10) + ')' : '');
+        n.title = (pm.unlocked ? 'Unlocked: ' : 'Locked: ') + pm.title + (pm.unlocked ? ' (' + (pm.display_date || String(pm.unlocked_at || '').slice(0, 10)) + ')' : '') + (pm.category === 'historical' ? ' · historical milestone' : '');
       });
       feedList.textContent = '';
       for (const a of activityModel((overview && overview.activity) || []).slice(0, 30)) {
