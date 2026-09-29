@@ -139,13 +139,17 @@
     const stale = w.stale === true || w.status === 'OFFLINE';
     const status = stale ? 'OFFLINE' : String(w.status || 'UNKNOWN');
     const m = { id, present: true, status, tone: stale ? 'stale' : (EXT_TONE[status] || 'idle'), stale, badge: 'EXTERNAL · WINDOWS', rows: [] };
-    const row = (k, v) => { if (v !== undefined && v !== null && v !== '') m.rows.push([k, String(v)]); };
-    row('Status', stale ? 'OFFLINE (stale: last report ' + ago(w.lastSeenAt, now) + ' ago)' : status);
-    row('Phase', w.phase); row('Message', w.message);
+    const has = (v) => v !== undefined && v !== null && v !== '';
+    const row = (k, v) => { if (has(v)) m.rows.push([k, String(v)]); };
+    // While stale, reported values are history, never current state: label them.
+    const hist = (v) => (has(v) ? (stale ? 'last reported: ' + v + ' (stale)' : v) : null);
+    row('Worker', (w.name || id) + ' · Windows / external');
+    row('Status', stale ? 'OFFLINE (stale: last report ' + (w.lastSeenAt ? ago(w.lastSeenAt, now) + ' ago' : 'never') + ')' : status);
+    row('Phase', hist(w.phase) || '—'); row('Message', hist(w.message));
     if (id === 'aalto_seat_watcher') {
       m.label = stale ? 'STALE' : status;
-      row('Last check', w.lastCheckAt ? ago(w.lastCheckAt, now) + ' ago' : 'not reported');
-      row('Next poll', !stale && w.nextCheckAt ? hhmm(w.nextCheckAt) : (stale ? '—' : 'not reported'));
+      row('Last check', w.lastCheckAt ? ago(w.lastCheckAt, now) + ' ago' + (stale ? ' (stale)' : '') : 'UNKNOWN');
+      row('Next poll', !stale && w.nextCheckAt ? hhmm(w.nextCheckAt) : (stale ? '—' : 'UNKNOWN'));
       row('Enabled (TURN ON/OFF)', w.enabled === false ? 'OFF' : 'ON');
     }
     if (id === 'startag_50k') {
@@ -162,10 +166,10 @@
       if (!stale && status === 'WAITING_APPROVAL') m.alert = 'WAITING_APPROVAL' + (w.message ? ' · ' + w.message : '');
       if (!stale && status === 'ERROR') m.alert = 'ERROR' + (d.errorSummary ? ' · ' + d.errorSummary : '');
       row('Progress', stale ? (cur !== null ? 'last reported ' + cur.toLocaleString('en-US') + ' / 50,000 (stale)' : 'unknown (stale)') : m.board);
-      row('Checkpoint', m.checkpoint); row('Last batch', m.lastBatch);
+      row('Checkpoint', hist(m.checkpoint) || '—'); row('Last batch', hist(m.lastBatch ? m.lastBatch + (Number.isFinite(d.lastBatch.at) ? ' at ' + hhmm(d.lastBatch.at) : '') : null) || '—');
       row('Codex', m.codex); row('Proofreader', m.proofreader);
       if (d.codex && d.codex.nextRetryAt && status === 'WAITING_LIMIT' && !stale) row('Codex retry', hhmm(d.codex.nextRetryAt));
-      if (d.errorSummary) row('Error', d.errorSummary);
+      if (d.errorSummary) row('Error', hist(d.errorSummary));
     }
     row('Last seen', w.lastSeenAt ? ago(w.lastSeenAt, now) + ' ago' : 'never');
     row('Stale', stale ? 'yes' : 'no');

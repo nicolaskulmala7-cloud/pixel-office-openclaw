@@ -907,7 +907,8 @@ const encodePNG = (src, w, h, scale) => {
 // ---------------------------------------------------------------------------
 // Targets, agents and UI anchors: validate, then write outputs
 
-const rooms = ROOMS.map(r => ({ id: r.id, name: r.name, color: r.color, ...(r.external ? { external: r.external } : {}), tiles: roomTiles(r) }));
+// External Windows workers get a room of kind 'external-worker' (never an agent room).
+const rooms = ROOMS.map(r => ({ id: r.id, name: r.name, color: r.color, kind: r.external ? 'external-worker' : 'agent', ...(r.external ? { workerId: r.external } : {}), tiles: roomTiles(r) }));
 const roomByKey = (k) => { const r = ROOMS.find((x) => x.key === k); if (!r) throw new Error(`unknown room ${k}`); return r; };
 const abs = (key, [i, j]) => { const r = roomByKey(key); return { x: r.rect[0] + i, y: r.rect[1] + j }; };
 const inRect = (t, r) => t.x >= r.rect[0] && t.x <= r.rect[2] && t.y >= r.rect[1] && t.y <= r.rect[3];

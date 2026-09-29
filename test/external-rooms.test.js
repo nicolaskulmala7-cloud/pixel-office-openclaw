@@ -15,8 +15,8 @@ const NOKS = { BUSINESS_OS_KILLSWITCH_CLI: '/nonexistent/killswitch/system-kill.
 
 test('both external-worker rooms exist, tagged with their worker id, in a 36x21 map', () => {
   assert.deepEqual([L.cols, L.rows], [36, 21]);
-  assert.equal(room('Aalto Watch Room').external, 'aalto_seat_watcher');
-  assert.equal(room('STARTAG Lead Factory').external, 'startag_50k');
+  assert.deepEqual([room('Aalto Watch Room').kind, room('Aalto Watch Room').workerId], ['external-worker', 'aalto_seat_watcher']);
+  assert.deepEqual([room('STARTAG Lead Factory').kind, room('STARTAG Lead Factory').workerId], ['external-worker', 'startag_50k']);
   assert.deepEqual(L.ui.external.map((e) => e.worker).sort(), ['aalto_seat_watcher', 'startag_50k']);
 });
 
@@ -46,7 +46,7 @@ test('external workers are not agents; all 16 agents keep valid seats outside th
   const ids = L.agents.map((a) => a.id);
   assert.equal(ids.length, 16);
   assert.ok(!ids.some((id) => /aalto|startag|codex|proofread/i.test(id)));
-  const ext = L.rooms.filter((r) => r.external);
+  const ext = L.rooms.filter((r) => r.kind === 'external-worker');
   for (const a of L.agents) {
     const t = L.targets.work[a.id];
     assert.ok(t && [0, 3].includes(L.collision[t.y][t.x]), a.id);
@@ -110,4 +110,64 @@ test('UI never GETs /api/workers/<id>/status and builds the external rooms witho
   const cc = fs.readFileSync(path.join(REPO, 'command-center.js'), 'utf8');
   assert.doesNotMatch(cc, /innerHTML|insertAdjacentHTML/);
   assert.match(cc, /not an OpenClaw agent · not controlled from the VPS/);
+});
+
+// ---- Real UI pathfinding (the Pathfinder class from index.html, unmodified) ----
+function realPathfinder(collision) {
+  const html = fs.readFileSync(path.join(REPO, 'index.html'), 'utf8');
+  const start = html.indexOf('class Pathfinder {');
+  const end = html.indexOf('return []; // Sin ruta', start);
+  assert.ok(start > 0 && end > start, 'Pathfinder class found in index.html');
+  const src = html.slice(start, html.indexOf('}', html.indexOf('}', end) + 1) + 1);
+  return new Function('COLLISION_MAP', 'COLS', 'ROWS', 'DOORS_OPEN', `${src}; return Pathfinder;`)(collision, collision[0].length, collision.length, {});
+}
+
+test('real UI Pathfinder: every agent seat, spawn, idle seat and every room (incl. both external rooms) is reachable from the lift', () => {
+  const PF = realPathfinder(L.collision);
+  const lift = { x: L.ui.shaft.x, y: Math.floor(L.rows / 2) };
+  assert.equal(L.collision[lift.y][lift.x], 0);
+  const reach = (t, what) => {
+    if (t.x === lift.x && t.y === lift.y) return;
+    const p = PF.findPath(lift.x, lift.y, t.x, t.y);
+    assert.ok(p.length > 0, `${what} (${t.x},${t.y}) reachable`);
+    const last = p[p.length - 1];
+    assert.deepEqual([last.x, last.y], [t.x, t.y]);
+    for (const s of p.slice(0, -1)) assert.notEqual(L.collision[s.y][s.x], 1, `${what}: path never crosses a wall`);
+  };
+  for (const a of L.agents) reach(L.targets.work[a.id], `seat of ${a.id}`);
+  for (const [id, s] of Object.entries(L.spawns)) reach(s, `spawn of ${id}`);
+  L.targets.idle.forEach((t, i) => reach(t, `idle seat ${i}`));
+  for (const r of L.rooms) {
+    const floor = r.tiles.find((t) => L.collision[t.y][t.x] === 0);
+    assert.ok(floor, `${r.name} has walkable floor`);
+    reach(floor, r.name);
+  }
+  assert.equal(Object.keys(L.spawns).length, 16, 'a spawn per agent');
+  for (const s of Object.values(L.spawns)) assert.notEqual(L.collision[s.y][s.x], 1, 'no spawn in a wall');
+});
+
+test('usable-area hierarchy: STARTAG >= 4x Aalto; Aalto the smallest room; STARTAG among the largest work areas', () => {
+  const usable = (r) => r.tiles.filter((t) => L.collision[t.y][t.x] !== 1).length;
+  const a = usable(room('Aalto Watch Room')), f = usable(room('STARTAG Lead Factory'));
+  assert.ok(f >= 4 * a, `STARTAG ${f} vs Aalto ${a}`);
+  assert.ok(f >= 3 * a);
+  assert.equal(Math.min(...L.rooms.map(usable)), a, 'Aalto is the smallest usable area');
+  const bigger = L.rooms.filter((r) => usable(r) > f).map((r) => r.name);
+  assert.ok(bigger.length <= 3, `rooms larger than the factory: ${bigger.join(', ')}`);
+});
+
+test('stale STARTAG history is labelled, never shown as current; missing fields render as UNKNOWN/—, never 0%', () => {
+  const st = CC.externalRoomModel('startag_50k', { id: 'startag_50k', status: 'OFFLINE', stale: true, lastSeenAt: 1, phase: 'Domain discovery', message: 'Waiting for Proofreader', progress: { current: 500, target: 50000 }, details: { checkpoint: { id: 'STEP5I_CHECKPOINT500' }, lastBatch: { id: 'b5' }, codex: { state: 'WAITING_LIMIT' }, proofreader: { state: 'WAITING_HUMAN' } } });
+  const rows = Object.fromEntries(st.rows);
+  for (const k of ['Phase', 'Message', 'Checkpoint', 'Last batch']) assert.match(rows[k], /^last reported: .* \(stale\)$/, k);
+  assert.deepEqual([rows.Codex, rows.Proofreader, st.alert, st.fraction], ['—', '—', null, null]);
+  assert.doesNotMatch(JSON.stringify(st), /WAITING_LIMIT/, 'no stale Codex limit shown');
+  const bare = CC.externalRoomModel('startag_50k', { id: 'startag_50k', status: 'RUNNING', stale: false, lastSeenAt: Date.now() });
+  assert.equal(bare.board, 'NO PROGRESS REPORTED');
+  assert.equal(bare.fraction, null);
+  assert.doesNotMatch(JSON.stringify(bare), /0%/);
+  const ba = CC.externalRoomModel('aalto_seat_watcher', { id: 'aalto_seat_watcher', status: 'IDLE', stale: false, lastSeenAt: Date.now(), phase: 'Paused by Business OS global gate (gate STOPPED)', globalStop: { epoch: 2, state: 'STOPPED' } });
+  const br = Object.fromEntries(ba.rows);
+  assert.deepEqual([ba.label, ba.tone, br['Last check'], br['Next poll'], br['Last stop ack']], ['IDLE', 'idle', 'UNKNOWN', 'UNKNOWN', 'epoch 2']);
+  assert.match(br.Phase, /Paused by Business OS global gate/);
 });
