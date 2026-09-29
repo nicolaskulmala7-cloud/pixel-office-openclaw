@@ -126,12 +126,62 @@
     return items.slice().reverse().map((i) => ({ text: i.text, ago: ago(i.at, now), kind: i.kind, warn: i.level === 'warn' }));
   }
 
+  // External Windows workers (Aalto, STARTAG): rooms driven ONLY by the worker feed in
+  // /api/overview. They are not OpenClaw agents and are never controlled from the VPS.
+  // A stale or missing report renders STALE/OFFLINE; values are never filled in.
+  const STARTAG_TARGET = 50000;
+  const EXT_TONE = { WATCHING: 'ok', RUNNING: 'ok', PROOFREADING: 'ok', PROMPT_READY: 'ok', COMPLETED: 'ok', IDLE: 'idle', SEAT_FOUND: 'warn', ALERTING: 'warn', WAITING_LIMIT: 'warn', WAITING_APPROVAL: 'warn', ERROR: 'bad', OFF: 'off', OFFLINE: 'stale' };
+  function externalRoomModel(id, w, now = Date.now()) {
+    if (!w) {
+      return { id, present: false, status: 'NO DATA', tone: 'stale', stale: true, badge: 'EXTERNAL · WINDOWS', board: id === 'startag_50k' ? 'NO DATA' : null, rows: [['Status', 'no report received from the Windows worker']] };
+    }
+    const d = w.details || {};
+    const stale = w.stale === true || w.status === 'OFFLINE';
+    const status = stale ? 'OFFLINE' : String(w.status || 'UNKNOWN');
+    const m = { id, present: true, status, tone: stale ? 'stale' : (EXT_TONE[status] || 'idle'), stale, badge: 'EXTERNAL · WINDOWS', rows: [] };
+    const row = (k, v) => { if (v !== undefined && v !== null && v !== '') m.rows.push([k, String(v)]); };
+    row('Status', stale ? 'OFFLINE (stale: last report ' + ago(w.lastSeenAt, now) + ' ago)' : status);
+    row('Phase', w.phase); row('Message', w.message);
+    if (id === 'aalto_seat_watcher') {
+      m.label = stale ? 'STALE' : status;
+      row('Last check', w.lastCheckAt ? ago(w.lastCheckAt, now) + ' ago' : 'not reported');
+      row('Next poll', !stale && w.nextCheckAt ? hhmm(w.nextCheckAt) : (stale ? '—' : 'not reported'));
+      row('Enabled (TURN ON/OFF)', w.enabled === false ? 'OFF' : 'ON');
+    }
+    if (id === 'startag_50k') {
+      const p = w.progress || {};
+      const cur = Number.isFinite(p.current) ? p.current : null;
+      m.board = stale ? 'STALE / OFFLINE' : (cur === null ? 'NO PROGRESS REPORTED' : cur.toLocaleString('en-US') + ' / ' + STARTAG_TARGET.toLocaleString('en-US'));
+      m.fraction = !stale && cur !== null ? Math.max(0, Math.min(1, cur / STARTAG_TARGET)) : null;
+      m.codex = stale ? '—' : (d.codex ? d.codex.state : 'not reported');
+      m.proofreader = stale ? '—' : (d.proofreader ? d.proofreader.state : 'not reported');
+      m.checkpoint = d.checkpoint && d.checkpoint.id ? d.checkpoint.id : null;
+      m.lastBatch = d.lastBatch && d.lastBatch.id ? d.lastBatch.id + (Number.isFinite(d.lastBatch.count) ? ' (' + d.lastBatch.count + ')' : '') : null;
+      m.alert = null;
+      if (!stale && status === 'WAITING_LIMIT') m.alert = 'WAITING_LIMIT' + (d.codex && d.codex.nextRetryAt ? ' · retry ' + hhmm(d.codex.nextRetryAt) : '');
+      if (!stale && status === 'WAITING_APPROVAL') m.alert = 'WAITING_APPROVAL' + (w.message ? ' · ' + w.message : '');
+      if (!stale && status === 'ERROR') m.alert = 'ERROR' + (d.errorSummary ? ' · ' + d.errorSummary : '');
+      row('Progress', stale ? (cur !== null ? 'last reported ' + cur.toLocaleString('en-US') + ' / 50,000 (stale)' : 'unknown (stale)') : m.board);
+      row('Checkpoint', m.checkpoint); row('Last batch', m.lastBatch);
+      row('Codex', m.codex); row('Proofreader', m.proofreader);
+      if (d.codex && d.codex.nextRetryAt && status === 'WAITING_LIMIT' && !stale) row('Codex retry', hhmm(d.codex.nextRetryAt));
+      if (d.errorSummary) row('Error', d.errorSummary);
+    }
+    row('Last seen', w.lastSeenAt ? ago(w.lastSeenAt, now) + ' ago' : 'never');
+    row('Stale', stale ? 'yes' : 'no');
+    if (w.propagation && w.propagation !== 'NOT_APPLICABLE') row('Global stop', w.propagation === 'ACKED' ? 'acknowledged by the worker' : 'propagation pending (not stopped by the VPS)');
+    if (w.globalStop && Number.isFinite(w.globalStop.epoch)) row('Last stop ack', 'epoch ' + w.globalStop.epoch);
+    row('Controlled from VPS', 'no (observed only)');
+    return m;
+  }
+
   // ------------------------------------------------------------ DOM (browser)
 
   function mount({ doc, stage, hud, fetchImpl, layoutPromise, getHudInputs, setInterval: si = (typeof setInterval === 'function' ? setInterval : null) }) {
     const el = (tag, cls, text) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
     let overview = null;
     let plaqueNodes = [];
+    let extRooms = []; // { id, nodes }
 
     // HUD groups
     hud.textContent = '';
@@ -202,6 +252,7 @@
         n.textContent = pm.unlocked ? '★' : '';
         n.title = (pm.unlocked ? 'Unlocked: ' : 'Locked: ') + pm.title + (pm.unlocked ? ' (' + (pm.display_date || String(pm.unlocked_at || '').slice(0, 10)) + ')' : '') + (pm.category === 'historical' ? ' · historical milestone' : '');
       });
+      renderExternal();
       feedList.textContent = '';
       for (const a of activityModel((overview && overview.activity) || []).slice(0, 30)) {
         const row = el('div', 'cc-feed-row' + (a.warn ? ' warn' : ''));
@@ -209,6 +260,44 @@
         row.appendChild(el('span', 'cc-feed-text', a.text));
         feedList.appendChild(row);
       }
+    }
+
+    // External worker rooms + detail card
+    const card = el('div', 'cc-ext-card hidden');
+    const cardTitle = el('b', 'cc-ext-title', '');
+    const cardClose = el('button', 'cc-ext-close', '×'); cardClose.type = 'button';
+    const cardRows = el('div', 'cc-ext-rows');
+    card.appendChild(cardClose); card.appendChild(cardTitle); card.appendChild(cardRows);
+    card.appendChild(el('div', 'cc-ext-note', 'External Windows worker · observed via /api/workers · not an OpenClaw agent · not controlled from the VPS'));
+    stage.appendChild(card);
+    let cardFor = null;
+    cardClose.addEventListener('click', () => { cardFor = null; card.className = 'cc-ext-card hidden'; });
+    const workerById = (id) => ((overview && overview.workers) || []).find((x) => x.id === id) || null;
+    function renderCard() {
+      if (!cardFor) return;
+      const m = externalRoomModel(cardFor.id, workerById(cardFor.id));
+      cardTitle.textContent = cardFor.room;
+      cardRows.textContent = '';
+      for (const [k, v] of m.rows) { const r = el('div', 'cc-ext-row'); r.appendChild(el('span', null, k)); r.appendChild(el('b', null, v)); cardRows.appendChild(r); }
+    }
+    function renderExternal() {
+      for (const r of extRooms) {
+        const m = externalRoomModel(r.id, workerById(r.id));
+        r.nodes.room.className = 'cc-ext-room tone-' + m.tone;
+        r.nodes.status.textContent = m.id === 'aalto_seat_watcher' ? (m.label || m.status) : m.status;
+        if (r.nodes.lamp) r.nodes.lamp.className = 'cc-ext-lamp tone-' + m.tone;
+        if (r.nodes.board) {
+          r.nodes.boardText.textContent = m.board;
+          r.nodes.boardBar.style.width = m.fraction === null || m.fraction === undefined ? '0' : Math.round(m.fraction * 100) + '%';
+          r.nodes.board.className = 'cc-ext-board' + (m.stale ? ' stale' : '');
+          r.nodes.codex.textContent = 'CODEX: ' + m.codex;
+          r.nodes.proof.textContent = 'PROOFREADER: ' + m.proofreader;
+          r.nodes.cp.textContent = m.stale ? 'CP —' : 'CP ' + (m.checkpoint || '—') + (m.lastBatch ? ' · ' + m.lastBatch : '');
+          r.nodes.alert.textContent = m.alert || '';
+          r.nodes.alert.className = 'cc-ext-alert' + (m.alert ? '' : ' hidden');
+        }
+      }
+      renderCard();
     }
 
     async function refresh() {
@@ -231,6 +320,29 @@
         stage.appendChild(n);
         plaqueNodes.push({ pos: p, node: n });
       }
+      const place = (n, x, y, wTiles) => { n.style.left = x * tile + 'px'; n.style.top = y * tile + 'px'; if (wTiles) n.style.width = wTiles * tile + 'px'; stage.appendChild(n); return n; };
+      for (const e of (layout && layout.ui && layout.ui.external) || []) {
+        const nodes = {};
+        nodes.room = place(el('div', 'cc-ext-room'), e.rect.x, e.rect.y, e.rect.w);
+        nodes.room.style.height = e.rect.h * tile + 'px';
+        nodes.room.title = e.room + ' — click for details';
+        nodes.room.appendChild(el('span', 'cc-ext-badge', e.worker === 'aalto_seat_watcher' ? 'EXT' : 'EXTERNAL · WINDOWS'));
+        nodes.status = el('span', 'cc-ext-status', '…');
+        nodes.room.appendChild(nodes.status);
+        nodes.room.addEventListener('click', () => { cardFor = { id: e.worker, room: e.room }; card.className = 'cc-ext-card'; renderCard(); });
+        const st = e.stations || {};
+        if (st.lamp) nodes.lamp = place(el('div', 'cc-ext-lamp'), st.lamp.x, st.lamp.y);
+        if (st.board) {
+          nodes.board = place(el('div', 'cc-ext-board'), st.board.x, st.board.y, st.board.w);
+          nodes.boardText = el('span', 'cc-ext-board-text', '…'); nodes.boardBar = el('i', 'cc-ext-board-bar');
+          nodes.board.appendChild(nodes.boardText); nodes.board.appendChild(nodes.boardBar);
+        }
+        if (st.codex) nodes.codex = place(el('div', 'cc-ext-label'), st.codex.x - 1, st.codex.y, 4);
+        if (st.proofreader) nodes.proof = place(el('div', 'cc-ext-label'), st.proofreader.x - 1, st.proofreader.y, 4);
+        if (st.checkpoint) nodes.cp = place(el('div', 'cc-ext-label cc-ext-cp'), st.checkpoint.x, st.checkpoint.y, st.checkpoint.w + 2);
+        if (st.conveyor) nodes.alert = place(el('div', 'cc-ext-alert hidden'), st.conveyor.x - 1, st.conveyor.y + 2, st.conveyor.w + 2);
+        extRooms.push({ id: e.worker, nodes });
+      }
       render();
     });
 
@@ -239,5 +351,5 @@
     return { refresh, render, renderHud, get overview() { return overview; }, agentMeta: (id) => agentMeta(id, overview), workerModel };
   }
 
-  return { hudModel, levelModel, usageModel, plaquesModel, agentMeta, workerModel, activityModel, mount, OVERVIEW_URL, POLL_MS };
+  return { hudModel, levelModel, usageModel, plaquesModel, agentMeta, workerModel, activityModel, externalRoomModel, mount, OVERVIEW_URL, POLL_MS };
 });

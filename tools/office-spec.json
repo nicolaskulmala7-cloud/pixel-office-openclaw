@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "note": "Data-driven compact office (Fallout-Shelter-style stacked floors; original art only). Floors are bands of compact rooms around a central lift shaft. Everything (art, collision, rooms, doors, targets, idle seats, lever, plaques) is generated from this file.",
+  "note": "Data-driven compact office (external Windows workers get rooms but are never agents) (Fallout-Shelter-style stacked floors; original art only). Floors are bands of compact rooms around a central lift shaft. Everything (art, collision, rooms, doors, targets, idle seats, lever, plaques) is generated from this file.",
   "room_height": 4,
   "shaft_width": 2,
   "legend_note": "Row 0 of a template is against the top wall; the last row is the walkway where doors are placed.",
@@ -8,7 +8,7 @@
     { "left": ["achievement_hall"], "right": ["oval_office"] },
     { "left": ["research_lab", "writing_studio"], "right": ["review_room", "operations_room"] },
     { "left": ["trading_floor", "crypto_lab"], "right": ["memecoin_war_room", "sports_analytics_room"] },
-    { "left": ["hangout_room"], "right": [] }
+    { "left": ["hangout_room"], "right": ["startag_factory", "aalto_watch"] }
   ],
   "rooms": {
     "oval_office": {
@@ -51,6 +51,14 @@
       "name": "Sports Analytics Room", "label": "SPORTS ANALYTICS", "color": "#06b6d4", "floor": "sports",
       "template": ["JJJJJJJ", ".k.k.k.", ".c.c.c.", "......."]
     },
+    "startag_factory": {
+      "name": "STARTAG Lead Factory", "label": "STARTAG LEAD FACTORY", "color": "#f59e0b", "floor": "factory", "external": "startag_50k",
+      "template": ["bbbbbb.nnnRR", ".xx....gggg.", ".yy..mm.....", "............"]
+    },
+    "aalto_watch": {
+      "name": "Aalto Watch Room", "label": "AALTO", "color": "#38bdf8", "floor": "booth", "external": "aalto_seat_watcher",
+      "template": ["Oo", "..", "..", ".."]
+    },
     "hangout_room": {
       "name": "Hangout Room", "color": "#8b5cf6", "floor": "lounge",
       "template": ["MM...AA...CC..P", ".t.t.t.t.t.t.t.", ".u.K.u.K.u.K.u.", "..............."]
@@ -77,6 +85,10 @@
   ],
   "ui": {
     "lever": { "room": "oval_office", "at": [8, 1] },
-    "plaques": { "room": "achievement_hall", "char": "U" }
+    "plaques": { "room": "achievement_hall", "char": "U" },
+    "external": {
+      "startag_50k": { "room": "startag_factory", "stations": { "board": "b", "checkpoint": "n", "codex": "x", "proofreader": "y", "conveyor": "g", "processor": "m" } },
+      "aalto_seat_watcher": { "room": "aalto_watch", "stations": { "monitor": "O", "lamp": "o" } }
+    }
   }
 }

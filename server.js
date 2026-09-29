@@ -715,6 +715,7 @@ app.get('/api/overview', async (req, res) => {
     const workers = Object.values(workerFeed.workers).map(w => effectiveWorker(w, now)).map(w => ({
       id: w.id, name: w.name, status: w.status, enabled: w.enabled, stale: w.stale, lastSeenAt: w.lastSeenAt || null,
       phase: clip(w.phase, 100), message: clip(w.message, 160), progress: w.progress || null, details: w.details || null,
+      lastCheckAt: w.lastCheckAt || null, nextCheckAt: w.nextCheckAt || null, globalStop: w.globalStop || null,
       controlledFromVps: false,
       propagation: system === 'RUNNING' ? 'NOT_APPLICABLE'
         : (w.globalStop && epoch !== null && w.globalStop.epoch === epoch ? 'ACKED' : 'EXTERNAL_PROPAGATION_PENDING')

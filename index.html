@@ -61,7 +61,34 @@
         #mapStage { position: relative; }
         .cc-plaque { position: absolute; width: 32px; height: 32px; z-index: 6; color: #1b1f29; font: bold 14px "Courier New", monospace; display: flex; align-items: center; justify-content: center; }
         .cc-plaque.unlocked { background: radial-gradient(#fde68a, #c9a227); border: 1px solid #fff7d6; border-radius: 3px; box-shadow: 0 0 8px #e0b83a; }
-        .cc-feed { position: absolute; right: 8px; bottom: 8px; width: 420px; z-index: 7; background: rgba(17, 24, 39, 0.92); border: 1px solid #374151; border-radius: 6px; font: 10px "Courier New", monospace; color: #d1d5db; }
+        .cc-feed { position: static; margin-top: 6px; width: auto; z-index: 7; background: rgba(17, 24, 39, 0.92); border: 1px solid #374151; border-radius: 6px; font: 10px "Courier New", monospace; color: #d1d5db; }
+        /* External Windows workers (not OpenClaw agents): rooms driven by /api/workers */
+        .cc-ext-room { position: absolute; z-index: 5; cursor: pointer; box-sizing: border-box; border: 1px dashed rgba(148, 163, 184, 0.35); }
+        .cc-ext-room:hover { border-color: #e5e7eb; }
+        .cc-ext-badge { position: absolute; left: 2px; bottom: 2px; font: bold 8px "Courier New", monospace; color: #0b0f14; background: #94a3b8; padding: 0 3px; border-radius: 2px; }
+        .cc-ext-status { position: absolute; right: 2px; bottom: 2px; font: bold 9px "Courier New", monospace; padding: 0 3px; border-radius: 2px; background: #1f2937; color: #e5e7eb; }
+        .cc-ext-room.tone-ok .cc-ext-status { background: #166534; color: #dcfce7; }
+        .cc-ext-room.tone-warn .cc-ext-status { background: #92400e; color: #fef3c7; }
+        .cc-ext-room.tone-bad .cc-ext-status { background: #991b1b; color: #fee2e2; }
+        .cc-ext-room.tone-stale .cc-ext-status, .cc-ext-room.tone-off .cc-ext-status { background: #374151; color: #9ca3af; }
+        .cc-ext-lamp { position: absolute; z-index: 6; width: 10px; height: 10px; margin: 5px 11px; border-radius: 50%; background: #4b5563; pointer-events: none; }
+        .cc-ext-lamp.tone-ok { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .cc-ext-lamp.tone-warn { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; animation: ccBlink 1s steps(2) infinite; }
+        .cc-ext-lamp.tone-bad { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
+        @keyframes ccBlink { 50% { opacity: 0.3; } }
+        .cc-ext-board { position: absolute; z-index: 6; height: 22px; margin-top: 4px; padding: 0 6px; box-sizing: border-box; pointer-events: none; font: bold 11px "Courier New", monospace; color: #fcd34d; }
+        .cc-ext-board.stale { color: #9ca3af; }
+        .cc-ext-board-bar { position: absolute; left: 6px; bottom: 2px; height: 2px; background: #f59e0b; max-width: calc(100% - 12px); }
+        .cc-ext-label { position: absolute; z-index: 6; margin-top: -6px; font: bold 8px "Courier New", monospace; color: #e5e7eb; text-shadow: 0 1px 0 #000; pointer-events: none; white-space: nowrap; overflow: hidden; }
+        .cc-ext-cp { margin-top: 20px; color: #7dd3fc; }
+        .cc-ext-alert { position: absolute; z-index: 6; font: bold 9px "Courier New", monospace; color: #fef3c7; background: rgba(146, 64, 14, 0.9); padding: 1px 4px; border-radius: 2px; pointer-events: none; white-space: nowrap; overflow: hidden; }
+        .cc-ext-alert.hidden, .cc-ext-card.hidden { display: none; }
+        .cc-ext-card { position: absolute; right: 8px; top: 8px; width: 300px; z-index: 9; background: rgba(17, 24, 39, 0.96); border: 1px solid #4b5563; border-radius: 6px; padding: 8px 10px; font: 11px "Courier New", monospace; color: #d1d5db; }
+        .cc-ext-title { display: block; color: #f59e0b; margin-bottom: 6px; }
+        .cc-ext-close { position: absolute; right: 6px; top: 4px; background: none; border: 0; color: #9ca3af; font-size: 14px; cursor: pointer; }
+        .cc-ext-row { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; }
+        .cc-ext-row b { color: #f3f4f6; text-align: right; overflow-wrap: anywhere; }
+        .cc-ext-note { margin-top: 6px; color: #6b7280; font-size: 9px; }
         .cc-feed-head { width: 100%; text-align: left; padding: 4px 8px; color: #c9a227; font-weight: bold; background: none; border: 0; cursor: pointer; }
         .cc-feed-list { max-height: 150px; overflow-y: auto; padding: 0 8px 6px; }
         .cc-feed.collapsed .cc-feed-list { display: none; }

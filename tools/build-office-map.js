@@ -89,7 +89,7 @@ SPEC.floors.forEach((floor, fi) => {
       if (grid[y][x0 + w] !== 'D') set(x0 + w, y, '#');
     }
     r.template.forEach((row, j) => [...row].forEach((ch, i) => set(x0 + i, y0 + j, ch)));
-    ROOMS.push({ key, id: ROOMS.length + 1, name: r.name, label: r.label, color: r.color, floor: r.floor, oval: !!r.oval, rect: [x0, y0, x0 + w - 1, y0 + RH - 1], sign: [x0, yWall, x0 + w - 1] });
+    ROOMS.push({ key, id: ROOMS.length + 1, name: r.name, label: r.label, color: r.color, floor: r.floor, oval: !!r.oval, external: r.external || null, rect: [x0, y0, x0 + w - 1, y0 + RH - 1], sign: [x0, yWall, x0 + w - 1] });
     return w;
   };
   // Right side: rooms left-to-right starting next to the shaft.
@@ -123,7 +123,9 @@ const ZONES = [{ name: 'Lift', rect: [SHAFT_X, 1, SHAFT_X + SW - 1, ROWS - 2], f
 // Validation + derived data
 
 const at = (x, y) => (x < 0 || y < 0 || x >= COLS || y >= ROWS ? '#' : LAYOUT[y][x]);
-const FURNITURE = new Set(['T', 'k', 'w', 'L', 'B', 'W', 'F', 'P', 'X', 'f', 'l', 'K', 'M', 'A', 'C', 'Y', 'Z', 'Q', 'H', 'J', 'G', 'V', 'R', 'N', 'U', 'I']);
+const FURNITURE = new Set(['T', 'k', 'w', 'L', 'B', 'W', 'F', 'P', 'X', 'f', 'l', 'K', 'M', 'A', 'C', 'Y', 'Z', 'Q', 'H', 'J', 'G', 'V', 'R', 'N', 'U', 'I',
+  // external-worker rooms (STARTAG Lead Factory, Aalto Watch Room)
+  'b', 'n', 'x', 'y', 'g', 'm', 'O', 'o']);
 const SEATS = new Set(['c', 'E', 'q', 'p', 's', 't', 'u']);
 const code = (ch) => {
   if (ch === '#' || ch === '~' || FURNITURE.has(ch)) return 1;
@@ -268,6 +270,15 @@ const floorTile = (tx, ty) => {
     rect(ox, oy, T, T, '#b8905c');
     for (let j = 0; j < T; j += 4) rect(ox, oy + j, T, 1, '#a57f4f');
     rect(ox + ((ty % 2) ? 5 : 11), oy, 1, T, '#9a7548');
+  } else if (kind === 'factory') { // STARTAG Lead Factory: sealed concrete, hazard edge on the walkway
+    rect(ox, oy, T, T, '#50545c');
+    rect(ox, oy + T - 1, T, 1, '#43474e'); rect(ox + T - 1, oy, 1, T, '#43474e');
+    if ((tx * 3 + ty * 5) % 4 === 0) { px(ox + 4, oy + 9, '#5d626b'); px(ox + 11, oy + 4, '#5d626b'); }
+    if (room && ty === room.rect[3]) for (let i = 0; i < T; i++) rect(ox + i, oy, 1, 2, ((i + tx * T) >> 2) % 2 ? '#1b1d21' : '#f5c542');
+  } else if (kind === 'booth') { // Aalto Watch Room: small dark carpet
+    rect(ox, oy, T, T, '#1b2433');
+    if ((tx + ty) % 2 === 0) px(ox + 8, oy + 8, '#26324a');
+    rect(ox, oy + T - 1, T, 1, '#151c28');
   } else if (kind === 'lift') { // lift shaft: steel floor plates with a centre guide rail
     rect(ox, oy, T, T, '#5b6270');
     rect(ox, oy + T - 1, T, 1, '#4a505c'); rect(ox + 1, oy + 1, T - 2, 1, '#6d7585');
@@ -649,6 +660,68 @@ const drawFurniture = (tx, ty, ch) => {
       rect(ox + 4, oy + 9, 8, 1, '#3a4452');
       break;
     }
+    case 'b': { // STARTAG production board (live values are drawn by the UI from /api/workers)
+      const l = first('b'), r = !same(tx + 1, ty, 'b');
+      rect(ox, oy + 1, T, 11, '#3a2a0c');
+      rect(ox + (l ? 1 : 0), oy + 2, T - (l ? 1 : 0) - (r ? 1 : 0), 9, '#101418');
+      rect(ox + (l ? 2 : 0), oy + 9, T - (l ? 2 : 0) - (r ? 2 : 0), 1, '#2a3038'); // empty progress track
+      if (l) { rect(ox + 1, oy + 1, T - 1, 1, '#f59e0b'); } else rect(ox, oy + 1, T, 1, '#f59e0b');
+      rect(ox, oy + 12, T, 1, '#000000', 0.25);
+      break;
+    }
+    case 'n': { // checkpoint / last-batch display
+      const l = first('n'), r = !same(tx + 1, ty, 'n');
+      rect(ox, oy + 2, T, 9, '#0b0f14');
+      rect(ox + (l ? 1 : 0), oy + 3, T - (l ? 1 : 0) - (r ? 1 : 0), 7, '#12202a');
+      rect(ox + (l ? 3 : 1), oy + 5, 6, 1, '#2f4a5c'); rect(ox + (l ? 3 : 1), oy + 7, 9, 1, '#2f4a5c');
+      rect(ox, oy + 11, T, 1, '#000000', 0.25);
+      break;
+    }
+    case 'x': { // CODEX workstation: dark desk, terminal with green code lines
+      slab(tx, ty, 'x', '#2a2f38', '#3a414d', '#1c2027');
+      if (first('x')) {
+        rect(ox + 3, oy + 2, 10, 7, '#0a0d10'); rect(ox + 4, oy + 3, 8, 5, '#07130c');
+        rect(ox + 5, oy + 4, 5, 1, '#39d98a'); rect(ox + 5, oy + 6, 3, 1, '#39d98a'); px(ox + 9, oy + 6, '#a7f3c9');
+        rect(ox + 7, oy + 9, 2, 1, '#3a414d');
+      } else { rect(ox + 1, oy + 5, 10, 3, '#444c59'); rect(ox + 2, oy + 6, 8, 1, '#5b6574'); }
+      break;
+    }
+    case 'y': { // GPT PROOFREADER workstation: light desk, chat-style screen
+      slab(tx, ty, 'y', '#5a6270', '#6c7584', '#434a55');
+      if (first('y')) {
+        rect(ox + 3, oy + 2, 10, 7, '#0a0d10'); rect(ox + 4, oy + 3, 8, 5, '#e8f4f2');
+        rect(ox + 5, oy + 4, 4, 1, '#10a37f'); rect(ox + 7, oy + 6, 4, 1, '#9aa5b1');
+        rect(ox + 7, oy + 9, 2, 1, '#6c7584');
+      } else { rect(ox + 2, oy + 4, 7, 7, '#f4f1e8'); rect(ox + 3, oy + 6, 5, 1, '#b8b09c'); rect(ox + 3, oy + 8, 4, 1, '#b8b09c'); }
+      break;
+    }
+    case 'g': { // lead conveyor: belt with rollers and lead cards
+      rect(ox, oy + 4, T, 8, '#23262b'); rect(ox, oy + 4, T, 1, '#3a3f46'); rect(ox, oy + 11, T, 1, '#15171a');
+      for (let i = 1; i < T; i += 4) rect(ox + i, oy + 5, 1, 6, '#30343a');
+      if ((tx + ty) % 2 === 0) { rect(ox + 5, oy + 5, 6, 5, '#f4f1e8'); rect(ox + 6, oy + 6, 4, 1, '#f59e0b'); rect(ox + 6, oy + 8, 3, 1, '#b8b09c'); }
+      rect(ox, oy + 12, T, 2, '#000000', 0.2);
+      break;
+    }
+    case 'm': { // data processor: steel cabinet with hopper and status lights
+      rect(ox + 1, oy + 2, T - 2, 12, '#6b7280'); rect(ox + 1, oy + 2, T - 2, 1, '#9ca3af'); rect(ox + 1, oy + 13, T - 2, 1, '#4b5563');
+      if (first('m')) { rect(ox + 3, oy, 8, 3, '#4b5563'); rect(ox + 4, oy + 5, 7, 5, '#1f2937'); rect(ox + 5, oy + 6, 5, 1, '#5fd0ff'); }
+      else { for (let j = 0; j < 3; j++) px(ox + 4 + j * 3, oy + 5, '#374151'); rect(ox + 3, oy + 8, 9, 2, '#374151'); }
+      shadowBelow(ox, oy, 12, 2);
+      break;
+    }
+    case 'O': { // Aalto watcher desk: one monitor with a seat icon
+      slab(tx, ty, 'O', '#3b4252', '#4c5566', '#2a303c');
+      rect(ox + 3, oy + 2, 10, 7, '#0a0d10'); rect(ox + 4, oy + 3, 8, 5, '#0f2a44');
+      rect(ox + 6, oy + 4, 4, 2, '#7dd3fc'); rect(ox + 6, oy + 6, 1, 1, '#7dd3fc'); rect(ox + 9, oy + 6, 1, 1, '#7dd3fc');
+      rect(ox + 7, oy + 9, 2, 1, '#4c5566');
+      break;
+    }
+    case 'o': { // indicator lamp (neutral; the UI lights it from the live worker status)
+      rect(ox + 7, oy + 6, 2, 8, '#4b5563'); rect(ox + 5, oy + 13, 6, 2, '#374151');
+      rect(ox + 5, oy + 2, 6, 5, '#1f2937'); rect(ox + 6, oy + 3, 4, 3, '#6b7280');
+      shadowBelow(ox, oy, 6, 5);
+      break;
+    }
     case 'U': { // achievement wall plaque frame (unlocks are drawn by the UI from verified data)
       rect(ox + 2, oy + 1, 12, 11, '#3b2a12');
       rect(ox + 3, oy + 2, 10, 9, '#1b1f29');
@@ -834,7 +907,7 @@ const encodePNG = (src, w, h, scale) => {
 // ---------------------------------------------------------------------------
 // Targets, agents and UI anchors: validate, then write outputs
 
-const rooms = ROOMS.map(r => ({ id: r.id, name: r.name, color: r.color, tiles: roomTiles(r) }));
+const rooms = ROOMS.map(r => ({ id: r.id, name: r.name, color: r.color, ...(r.external ? { external: r.external } : {}), tiles: roomTiles(r) }));
 const roomByKey = (k) => { const r = ROOMS.find((x) => x.key === k); if (!r) throw new Error(`unknown room ${k}`); return r; };
 const abs = (key, [i, j]) => { const r = roomByKey(key); return { x: r.rect[0] + i, y: r.rect[1] + j }; };
 const inRect = (t, r) => t.x >= r.rect[0] && t.x <= r.rect[2] && t.y >= r.rect[1] && t.y <= r.rect[3];
@@ -867,6 +940,24 @@ const leverTile = abs(SPEC.ui.lever.room, SPEC.ui.lever.at);
 if (collision[leverTile.y][leverTile.x] !== 0) throw new Error('lever tile must be free floor');
 const plaqueRoom = roomByKey(SPEC.ui.plaques.room);
 const plaques = roomTiles(plaqueRoom).filter((t) => at(t.x, t.y) === SPEC.ui.plaques.char).map((t) => ({ x: t.x, y: t.y }));
+// External Windows workers: a room each (never an agent), with station anchors for the live
+// status overlay. Anchor = first tile of the station's furniture run, plus its run width.
+const agentIds = new Set(SPEC.agents.map((a) => a.id));
+const external = Object.entries((SPEC.ui && SPEC.ui.external) || {}).map(([worker, e]) => {
+  if (agentIds.has(worker)) throw new Error(`${worker}: an external worker must not be an agent`);
+  const room = roomByKey(e.room);
+  if (!room || room.external !== worker) throw new Error(`${worker}: room ${e.room} must declare external: ${worker}`);
+  const stations = {};
+  for (const [name, ch] of Object.entries(e.stations || {})) {
+    const tiles = roomTiles(room).filter((t) => at(t.x, t.y) === ch);
+    if (!tiles.length) throw new Error(`${worker}: station ${name} (${ch}) not found in ${e.room}`);
+    const y = Math.min(...tiles.map((t) => t.y));
+    const row = tiles.filter((t) => t.y === y);
+    stations[name] = { x: Math.min(...row.map((t) => t.x)), y, w: row.length };
+  }
+  const [x1, y1, x2, y2] = room.rect;
+  return { worker, room: room.name, rect: { x: x1, y: y1, w: x2 - x1 + 1, h: y2 - y1 + 1 }, stations };
+});
 
 const root = path.join(__dirname, '..');
 const json = JSON.stringify({
@@ -878,7 +969,7 @@ const json = JSON.stringify({
   targets: { work: WORK_TARGETS, idle: IDLE_TARGETS, idleRoom: idleRoom.name, idleOverrides: IDLE_OVERRIDES, agentOrder: AGENT_ORDER },
   spawns,
   agents: SPEC.agents.map((a) => ({ id: a.id, name: a.name, role: a.role, color: a.slot, room: roomByKey(a.room).name, parent: a.parent || null, enabled: !!a.enabled })),
-  ui: { lever: leverTile, plaques, shaft: { x: SHAFT_X, width: SW } }
+  ui: { lever: leverTile, plaques, shaft: { x: SHAFT_X, width: SW }, external }
 }, null, 2)
   .replace(/\[\s+((?:\d+,\s*)*\d+)\s+\]/g, (m, inner) => `[${inner.replace(/\s+/g, '')}]`)
   .replace(/\{\s+"x": (\d+),\s+"y": (\d+)\s+\}/g, '{ "x": $1, "y": $2 }');
