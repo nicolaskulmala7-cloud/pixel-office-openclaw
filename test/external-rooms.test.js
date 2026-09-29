@@ -171,3 +171,18 @@ test('stale STARTAG history is labelled, never shown as current; missing fields 
   assert.deepEqual([ba.label, ba.tone, br['Last check'], br['Next poll'], br['Last stop ack']], ['IDLE', 'idle', 'UNKNOWN', 'UNKNOWN', 'epoch 2']);
   assert.match(br.Phase, /Paused by Business OS global gate/);
 });
+
+test('saved rooms from before the kind field still get kind/workerId from the generated layout', async (t) => {
+  const d = tmp('pixel-kind-');
+  const SIG = require('crypto').createHash('sha256').update(JSON.stringify(L.collision)).digest('hex').slice(0, 16);
+  const legacyRooms = L.rooms.map(({ kind, workerId, ...r }) => (r.name === 'Aalto Watch Room' ? { ...r, external: 'aalto_seat_watcher' } : r));
+  fs.writeFileSync(path.join(d, 'map.json'), JSON.stringify({ collision: L.collision, rooms: legacyRooms, layoutSignature: SIG, updatedAt: 'x' }));
+  const srv = await startServer({ ...NOKS, PIXEL_DATA_DIR_OVERRIDE: d });
+  t.after(() => srv.stop());
+  const rooms = await (await fetch(srv.base + '/api/rooms')).json();
+  const a = rooms.find((r) => r.name === 'Aalto Watch Room');
+  assert.deepEqual([a.kind, a.workerId], ['external-worker', 'aalto_seat_watcher']);
+  assert.equal(rooms.find((r) => r.name === 'STARTAG Lead Factory').workerId, 'startag_50k');
+  assert.equal(rooms.find((r) => r.name === 'Research Lab').kind, 'agent');
+  assert.equal(rooms.filter((r) => r.kind === 'external-worker').length, 2);
+});

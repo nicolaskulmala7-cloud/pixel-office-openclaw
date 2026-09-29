@@ -152,6 +152,18 @@ const DEFAULT_COLLISION = Array.isArray(OFFICE_LAYOUT.collision) ? OFFICE_LAYOUT
 const LAYOUT_SIGNATURE = DEFAULT_COLLISION
   ? require('crypto').createHash('sha256').update(JSON.stringify(DEFAULT_COLLISION)).digest('hex').slice(0, 16)
   : null;
+// Room semantics (kind: agent | external-worker, workerId) always come from the generated
+// layout; saved rooms keep their geometry but never lose, keep stale, or invent these fields.
+const withRoomSemantics = (rooms) => {
+  const byName = new Map((Array.isArray(OFFICE_LAYOUT.rooms) ? OFFICE_LAYOUT.rooms : []).map((r) => [r.name, r]));
+  return (rooms || []).map((r) => {
+    const g = byName.get(r && r.name);
+    if (!g) return r;
+    const { kind, workerId, external, ...rest } = r;
+    void kind; void workerId; void external;
+    return { ...rest, kind: g.kind || 'agent', ...(g.workerId ? { workerId: g.workerId } : {}) };
+  });
+};
 const SPAWNS = OFFICE_LAYOUT.spawns || {};
 const spawnX = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].x : fallback);
 const spawnY = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].y : fallback);
@@ -276,7 +288,9 @@ if (DEFAULT_COLLISION && initialMapData.collision && (gridSize(initialMapData.co
   persistMapData({ collision: initialMapData.collision, rooms: initialMapData.rooms });
 }
 if (Array.isArray(initialMapData.rooms) && initialMapData.rooms.length) {
-  config.rooms = initialMapData.rooms;
+  // Room semantics (kind: agent | external-worker, workerId) always come from the generated
+  // layout; saved rooms keep their geometry but never lose or invent these fields.
+  config.rooms = withRoomSemantics(initialMapData.rooms);
 }
 
 // Migración al equipo OpenClaw
@@ -913,7 +927,7 @@ app.get('/api/rooms', (req, res) => {
   try {
     const mapData = loadMapData();
     if (mapData && Array.isArray(mapData.rooms)) {
-      return res.json(mapData.rooms);
+      return res.json(withRoomSemantics(mapData.rooms));
     }
   } catch (e) {
     // ignore and fallback below
