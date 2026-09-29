@@ -69,13 +69,16 @@ test('agents: unique ids and sprite slots, enabled agents seated in their rooms,
     if (a.parent) {
       const p = L.agents.find((x) => x.id === a.parent);
       assert.equal(p.room, a.room, `${a.id} shares its parent's room`);
-      assert.equal(a.enabled, false, 'subagents are planned until approved');
+      const specA = SPEC.agents.find((x) => x.id === a.id);
+      assert.equal(a.enabled, specA.enabled === true, 'enabled only when the spec enables it (after OpenClaw provisioning)');
+      if (a.enabled) assert.deepEqual(L.targets.idleOverrides[a.id], L.targets.work[a.id], 'enabled subagents idle at their own desk');
     }
   }
   const seats = Object.values(L.targets.work).map((t) => `${t.x},${t.y}`);
   assert.equal(new Set(seats).size, seats.length, 'no shared work seats');
   assert.deepEqual(L.targets.agentOrder, L.agents.filter((a) => a.enabled).map((a) => a.id));
-  assert.equal(L.targets.agentOrder.length, 9);
+  assert.equal(L.targets.agentOrder.length, SPEC.agents.filter((a) => a.enabled).length);
+  assert.ok(L.targets.agentOrder.length >= 9, 'the 9 core agents are always enabled');
   assert.equal(L.targets.work.coordinator.room, 'Command Center');
   assert.deepEqual(L.targets.idleOverrides.coordinator, L.targets.work.coordinator, 'Diktator stays in the Oval Office');
   assert.equal(L.targets.work.operations.room, 'Operations Room');
@@ -87,7 +90,8 @@ test('agents: unique ids and sprite slots, enabled agents seated in their rooms,
 });
 
 test('idle seats are distinct Hangout seats, enough for every enabled agent', () => {
-  assert.ok(L.targets.idle.length >= L.targets.agentOrder.length);
+  const needIdle = SPEC.agents.filter((a) => a.enabled && a.idle !== 'work').length;
+  assert.ok(L.targets.idle.length >= needIdle, `${L.targets.idle.length} idle seats for ${needIdle} agents`);
   assert.equal(new Set(L.targets.idle.map((t) => `${t.x},${t.y}`)).size, L.targets.idle.length);
   for (const t of L.targets.idle) { assert.ok(inRoom('Hangout Room', t)); assert.equal(cell(t), 3); }
 });
@@ -143,7 +147,8 @@ test('server: agents/rooms from the layout; planned subagents hidden; workers ar
   const cfg = await (await fetch(srv.base + '/api/config')).json();
   assert.deepEqual(cfg.agents.map((a) => a.id), L.agents.filter((a) => a.enabled).map((a) => a.id));
   assert.equal(new Set(cfg.agents.map((a) => a.color)).size, cfg.agents.length);
-  assert.ok(!cfg.agents.some((a) => a.id === 'sports_bettor'), 'planned subagent not shown');
+  const bettorEnabled = SPEC.agents.find((a) => a.id === 'sports_bettor').enabled === true;
+  assert.equal(cfg.agents.some((a) => a.id === 'sports_bettor'), bettorEnabled, 'subagent shown only when enabled in the spec');
   assert.ok(!cfg.agents.some((a) => /startag|aalto/i.test(a.id)));
   const rooms = await (await fetch(srv.base + '/api/rooms')).json();
   for (const n of LOGICAL) assert.ok(rooms.some((r) => r.name === n), n);

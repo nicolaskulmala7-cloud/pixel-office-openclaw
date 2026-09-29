@@ -586,6 +586,41 @@
         "x": 24,
         "y": 1,
         "room": "Command Center"
+      },
+      "equities_scout": {
+        "x": 10,
+        "y": 13,
+        "room": "Trading Floor"
+      },
+      "macro_scout": {
+        "x": 14,
+        "y": 13,
+        "room": "Trading Floor"
+      },
+      "crypto_trader": {
+        "x": 2,
+        "y": 13,
+        "room": "Crypto Lab"
+      },
+      "onchain_scout": {
+        "x": 6,
+        "y": 13,
+        "room": "Crypto Lab"
+      },
+      "sentiment_scout": {
+        "x": 21,
+        "y": 13,
+        "room": "Memecoin War Room"
+      },
+      "sports_bettor": {
+        "x": 29,
+        "y": 13,
+        "room": "Sports Analytics Room"
+      },
+      "odds_scout": {
+        "x": 33,
+        "y": 13,
+        "room": "Sports Analytics Room"
       }
     },
     "agentOrder": [
@@ -597,7 +632,14 @@
       "crypto_analyst",
       "memecoin_scout",
       "sports_analyst",
-      "operations"
+      "operations",
+      "equities_scout",
+      "macro_scout",
+      "crypto_trader",
+      "onchain_scout",
+      "sentiment_scout",
+      "sports_bettor",
+      "odds_scout"
     ]
   },
   "spawns": {
@@ -609,7 +651,14 @@
     "crypto_analyst": { "x": 12, "y": 17 },
     "memecoin_scout": { "x": 14, "y": 17 },
     "sports_analyst": { "x": 2, "y": 18 },
-    "operations": { "x": 6, "y": 18 }
+    "operations": { "x": 6, "y": 18 },
+    "equities_scout": { "x": 10, "y": 13 },
+    "macro_scout": { "x": 14, "y": 13 },
+    "crypto_trader": { "x": 2, "y": 13 },
+    "onchain_scout": { "x": 6, "y": 13 },
+    "sentiment_scout": { "x": 21, "y": 13 },
+    "sports_bettor": { "x": 29, "y": 13 },
+    "odds_scout": { "x": 33, "y": 13 }
   },
   "agents": [
     {
@@ -700,7 +749,7 @@
       "color": 9,
       "room": "Trading Floor",
       "parent": "market_trader",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "macro_scout",
@@ -709,7 +758,7 @@
       "color": 10,
       "room": "Trading Floor",
       "parent": "market_trader",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "crypto_trader",
@@ -718,7 +767,7 @@
       "color": 11,
       "room": "Crypto Lab",
       "parent": "crypto_analyst",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "onchain_scout",
@@ -727,7 +776,7 @@
       "color": 12,
       "room": "Crypto Lab",
       "parent": "crypto_analyst",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "sentiment_scout",
@@ -736,7 +785,7 @@
       "color": 13,
       "room": "Memecoin War Room",
       "parent": "memecoin_scout",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "sports_bettor",
@@ -745,7 +794,7 @@
       "color": 14,
       "room": "Sports Analytics Room",
       "parent": "sports_analyst",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "odds_scout",
@@ -754,7 +803,7 @@
       "color": 15,
       "room": "Sports Analytics Room",
       "parent": "sports_analyst",
-      "enabled": false
+      "enabled": true
     }
   ],
   "ui": {
