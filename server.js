@@ -79,6 +79,7 @@ const persistMapData = (updates = {}) => {
   const merged = {
     ...current,
     ...updates,
+    ...(LAYOUT_SIGNATURE ? { layoutSignature: LAYOUT_SIGNATURE } : {}),
     updatedAt: new Date().toISOString()
   };
   writeJSONFile(MAP_PATH, merged);
@@ -146,6 +147,11 @@ const rectTiles = (x1, y1, x2, y2) => {
 // Plano de la oficina OpenClaw (generado por tools/build-office-map.js junto a assets/office-openclaw.png)
 const OFFICE_LAYOUT = readJSONFile(path.join(__dirname, 'assets', 'office-layout.json')) || {};
 const DEFAULT_COLLISION = Array.isArray(OFFICE_LAYOUT.collision) ? OFFICE_LAYOUT.collision : null;
+// Identity of the generated layout. Saved maps carry it, so a map saved against an older
+// generated layout (even a same-size one) is recognised as stale after a rebuild.
+const LAYOUT_SIGNATURE = DEFAULT_COLLISION
+  ? require('crypto').createHash('sha256').update(JSON.stringify(DEFAULT_COLLISION)).digest('hex').slice(0, 16)
+  : null;
 const SPAWNS = OFFICE_LAYOUT.spawns || {};
 const spawnX = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].x : fallback);
 const spawnY = (id, fallback) => tileCenter(SPAWNS[id] ? SPAWNS[id].y : fallback);
@@ -251,11 +257,20 @@ const walledOffRoom = (g) => DEFAULT_COLLISION && Array.isArray(OFFICE_LAYOUT.ro
   r.tiles.some(t => DEFAULT_COLLISION[t.y] && DEFAULT_COLLISION[t.y][t.x] !== 1) &&
   r.tiles.every(t => !(g[t.y]) || g[t.y][t.x] === 1)
 );
-if (DEFAULT_COLLISION && initialMapData.collision && (gridSize(initialMapData.collision) !== gridSize(DEFAULT_COLLISION) || walledOffRoom(initialMapData.collision))) {
-  backupOnce(MAP_PATH, 'pre-layout-resize-backup');
-  backupOnce(COLLISION_PATH, 'pre-layout-resize-backup');
-  backupOnce(ROOMS_PATH, 'pre-layout-resize-backup');
-  console.log(`Persisted map ${gridSize(initialMapData.collision)} is older than the generated layout ${gridSize(DEFAULT_COLLISION)}: using the generated layout`);
+// Also stale: a map saved against a different generated layout (signature mismatch), or an
+// unsigned legacy save that differs from the current layout. Dashboard edits are saved with
+// the current signature and survive restarts until the next layout rebuild; every
+// replacement is backed up once per target layout.
+const layoutChanged = (m) => !!LAYOUT_SIGNATURE && (m.layoutSignature
+  ? m.layoutSignature !== LAYOUT_SIGNATURE
+  : JSON.stringify(m.collision) !== JSON.stringify(DEFAULT_COLLISION));
+if (DEFAULT_COLLISION && initialMapData.collision && (gridSize(initialMapData.collision) !== gridSize(DEFAULT_COLLISION) || walledOffRoom(initialMapData.collision) || layoutChanged(initialMapData))) {
+  const resized = gridSize(initialMapData.collision) !== gridSize(DEFAULT_COLLISION);
+  const suffix = resized ? 'pre-layout-resize-backup' : `pre-layout-${LAYOUT_SIGNATURE}-backup`;
+  backupOnce(MAP_PATH, suffix);
+  backupOnce(COLLISION_PATH, suffix);
+  backupOnce(ROOMS_PATH, suffix);
+  console.log(`Persisted map ${gridSize(initialMapData.collision)} was saved for an older generated layout (${initialMapData.layoutSignature || 'unsigned'} -> ${LAYOUT_SIGNATURE}): using the generated layout`);
   initialMapData.collision = clone(DEFAULT_COLLISION);
   initialMapData.rooms = clone(DEFAULT_ROOMS);
   persistMapData({ collision: initialMapData.collision, rooms: initialMapData.rooms });

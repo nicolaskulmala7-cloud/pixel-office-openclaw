@@ -164,7 +164,7 @@ test('server: an obsolete persisted map (different size) is replaced with a back
   assert.ok(fs.existsSync(path.join(dataDir, 'map.pre-layout-resize-backup.json')));
 });
 
-test('server: a same-size grid that walls off a whole generated room is stale; a small user edit is kept', async (t) => {
+test('server: a walled-off room or a map saved for another layout is stale; an edit saved for the current layout is kept', async (t) => {
   const walled = JSON.parse(JSON.stringify(L.collision));
   for (const tt of room('Operations Room').tiles) walled[tt.y][tt.x] = 1;
   const d1 = tmp('pixel-walled-');
@@ -177,9 +177,21 @@ test('server: a same-size grid that walls off a whole generated room is stale; a
   const free = room('Hangout Room').tiles.find((tt) => edited[tt.y][tt.x] === 0);
   edited[free.y][free.x] = 1;
   const d2 = tmp('pixel-edit-');
-  fs.writeFileSync(path.join(d2, 'map.json'), JSON.stringify({ collision: edited, rooms: L.rooms, updatedAt: 'x' }));
+  const SIG = require('crypto').createHash('sha256').update(JSON.stringify(L.collision)).digest('hex').slice(0, 16);
+  fs.writeFileSync(path.join(d2, 'map.json'), JSON.stringify({ collision: edited, rooms: L.rooms, layoutSignature: SIG, updatedAt: 'x' }));
   const s2 = await startServer({ BUSINESS_OS_KILLSWITCH_CLI: '/nonexistent/killswitch/system-kill.js', PIXEL_DATA_DIR_OVERRIDE: d2 });
   t.after(() => s2.stop());
-  assert.equal((await (await fetch(s2.base + '/api/collision')).json())[free.y][free.x], 1);
+  assert.equal((await (await fetch(s2.base + '/api/collision')).json())[free.y][free.x], 1, 'edit saved for the current layout is kept');
+
+  // Same size, but saved for an older generated layout (unsigned or other signature): stale.
+  for (const [name, extra] of [['unsigned', {}], ['old-sig', { layoutSignature: '0000000000000000' }]]) {
+    const d3 = tmp(`pixel-${name}-`);
+    fs.writeFileSync(path.join(d3, 'map.json'), JSON.stringify({ collision: edited, rooms: L.rooms, updatedAt: 'x', ...extra }));
+    const s3 = await startServer({ BUSINESS_OS_KILLSWITCH_CLI: '/nonexistent/killswitch/system-kill.js', PIXEL_DATA_DIR_OVERRIDE: d3 });
+    t.after(() => s3.stop());
+    assert.deepEqual(await (await fetch(s3.base + '/api/collision')).json(), L.collision, `${name}: replaced by the generated layout`);
+    assert.ok(fs.existsSync(path.join(d3, `map.pre-layout-${SIG}-backup.json`)), `${name}: backed up`);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(d3, 'map.json'), 'utf8')).layoutSignature, SIG, 'saved with the current signature');
+  }
   assert.equal(fs.existsSync(path.join(d2, 'map.pre-layout-resize-backup.json')), false);
 });
