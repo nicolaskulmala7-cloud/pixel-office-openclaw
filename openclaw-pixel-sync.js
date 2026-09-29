@@ -16,6 +16,7 @@
 'use strict';
 
 const fs = require('fs');
+const { fetchFullResult } = require('./durable-result');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
@@ -460,45 +461,51 @@ const durableEventType = (task) => {
   return 'task_completed';
 };
 
-const emitDurableTask = (task) => {
+const emitDurableTask = async (task) => {
   if (!task || !DURABLE_TERMINAL_STATUSES.has(task.status)) return;
   if (!task.id || !task.agentId) return;
 
   const eventId = `openclaw-task-${task.id}`;
   if (durableEmitted.has(eventId)) return;
+  durableEmitted.add(eventId); // claim before the async fetch (no double emission)
 
-  const resultText = task.summary || task.error || 'Task completed without a terminal summary.';
+  try {
+    const fullResult = await fetchFullResult(rpc, task);
+    const resultText = fullResult || task.summary || task.error || 'Task completed without a terminal summary.';
 
-  const event = {
-    event_id: eventId,
-    task_id: task.id,
-    agent_id: task.agentId,
-    event_type: durableEventType(task),
-    title: task.title || `OpenClaw task ${task.id}`,
-    summary: task.summary || '',
-    body_markdown:
-      `## OpenClaw task result\n\n${resultText}` +
-      (task.error ? `\n\n## Error\n\n${task.error}` : ''),
-    related_notes: [],
-    created_at: isoTime(task.createdAt),
-    completed_at: isoTime(task.endedAt),
-    status: task.status === 'completed' ? 'COMPLETED' : 'FAILED',
-    metadata: {
-      openclaw_status: task.status,
-      kind: task.kind,
-      runtime: task.runtime,
-      tool_use_count: task.toolUseCount,
-      parent_task_id: task.parentTaskId
-    }
-  };
+    const event = {
+      event_id: eventId,
+      task_id: task.id,
+      agent_id: task.agentId,
+      event_type: durableEventType(task),
+      title: task.title || `OpenClaw task ${task.id}`,
+      summary: task.summary || '',
+      body_markdown:
+        `## OpenClaw task result\n\n${resultText}` +
+        (task.error ? `\n\n## Error\n\n${task.error}` : ''),
+      related_notes: [],
+      created_at: isoTime(task.createdAt),
+      completed_at: isoTime(task.endedAt),
+      status: task.status === 'completed' ? 'COMPLETED' : 'FAILED',
+      metadata: {
+        openclaw_status: task.status,
+        kind: task.kind,
+        runtime: task.runtime,
+        tool_use_count: task.toolUseCount,
+        parent_task_id: task.parentTaskId
+      }
+    };
 
-  fs.mkdirSync(BUSINESS_OS_EVENT_INBOX, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(BUSINESS_OS_EVENT_INBOX, { recursive: true, mode: 0o700 });
 
-  const target = path.join(BUSINESS_OS_EVENT_INBOX, `${eventId}.json`);
-  writePrivateJSON(target, event);
+    const target = path.join(BUSINESS_OS_EVENT_INBOX, `${eventId}.json`);
+    writePrivateJSON(target, event);
 
-  durableEmitted.add(eventId);
-  log(`[business-os] queued durable output ${eventId} (${task.agentId}/${event.event_type})`);
+    log(`[business-os] queued durable output ${eventId} (${task.agentId}/${event.event_type}${fullResult ? ', full result' : ''})`);
+  } catch (e) {
+    durableEmitted.delete(eventId); // release the claim so a later event can retry
+    throw e;
+  }
 };
 
 const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : undefined);
@@ -510,7 +517,8 @@ const sanitizeTask = (t) => {
     kind: str(t.kind, 32), runtime: str(t.runtime, 32),
     createdAt: t.createdAt, startedAt: t.startedAt, endedAt: t.endedAt,
     summary: str(t.terminalSummary, 600) || str(t.progressSummary, 600),
-    error: str(t.error, 300), toolUseCount: t.toolUseCount, parentTaskId: str(t.parentTaskId, 80)
+    error: str(t.error, 300), toolUseCount: t.toolUseCount, parentTaskId: str(t.parentTaskId, 80),
+    childSessionKey: str(t.childSessionKey, 200)
   };
 };
 const upsertTask = (raw, { emitDurable = false } = {}) => {
@@ -524,7 +532,7 @@ const upsertTask = (raw, { emitDurable = false } = {}) => {
 
   // Only the live task-event path opts into durable emission.
   // Periodic tasks.list reconciliation therefore cannot dump old tasks into Business OS.
-  if (emitDurable) emitDurableTask(t);
+  if (emitDurable) emitDurableTask(t).catch((e) => log(`[business-os] durable output failed: ${e.message}`));
 
   return changed;
 };
