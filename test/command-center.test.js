@@ -97,6 +97,9 @@ test('view models: FAILED highlighted, usage bar only from real numbers, plaques
   assert.equal(CC.usageModel('Claude', { status: 'AVAILABLE', percent_used: 42 }).kind, 'bar');
   assert.equal(CC.usageModel('Claude', { status: 'AVAILABLE', percent_used: null }).kind, 'state');
   assert.equal(CC.usageModel('Codex', undefined).text, 'UNKNOWN');
+  const windows = CC.usageModel('Codex', { status: 'LOW', detected_at: Date.now(), windows: [{ name: '5h', used_pct: 43 }, { name: '7d', used_pct: 93 }] });
+  assert.equal(windows.kind, 'windows');
+  assert.match(windows.text, /5H .*43%\n7D .*93%/);
   const pl = CC.plaquesModel([{ x: 1, y: 1 }, { x: 2, y: 1 }], [{ id: 'a', title: 'A', unlocked: true }, { id: 'b', title: 'B', unlocked: 'yes' }]);
   assert.deepEqual(pl.map((p) => p.unlocked), [true, false], 'only a literal true unlocks');
   assert.equal(CC.levelModel({ level: 3, net_eur: 40, next_threshold_eur: 100, progress: 0.2 }).text, 'LVL 3');

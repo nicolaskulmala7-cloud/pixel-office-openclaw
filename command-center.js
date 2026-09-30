@@ -71,6 +71,15 @@
 
   function usageModel(label, u) {
     const s = u || { status: 'UNKNOWN' };
+    const windows = (Array.isArray(s.windows) ? s.windows : []).filter((w) => Number.isFinite(w && w.used_pct));
+    if (windows.length) {
+      return {
+        label, kind: 'windows', percent: Math.max(...windows.map((w) => w.used_pct)),
+        text: windows.map((w) => String(w.name || '?').toUpperCase() + ' ' + bar(w.used_pct / 100, 10) + ' ' + w.used_pct + '%').join('\n'),
+        sub: (s.status === 'STALE' ? 'STALE · ' : '') + (s.detected_at ? 'seen ' + ago(s.detected_at) + ' ago' : ''),
+        reason: s.reason || '', status: s.status,
+      };
+    }
     if (Number.isFinite(s.percent_used)) {
       return { label, kind: 'bar', percent: s.percent_used, bar: bar(s.percent_used / 100), text: s.percent_used + '%', sub: s.reset_at ? 'reset ' + hhmm(s.reset_at) : '', status: s.status };
     }

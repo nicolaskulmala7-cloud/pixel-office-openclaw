@@ -55,9 +55,9 @@
         #hud .state-RUNNING b { color: #86efac; } #hud .state-DEGRADED b, #hud .state-UNKNOWN b { color: #fdba74; }
         #hud .state-STOPPED b, #hud .state-STOPPING b { color: #fca5a5; }
         #hud .lvl-name { color: #fde68a; } #hud .lvl-detail { color: #d1d5db; } #hud .lvl-bar { color: #c9a227; font-size: 9px; }
-        #hud .usage { display: flex; flex-direction: column; line-height: 1.15; min-width: 86px; }
-        #hud .usage-name { color: #9ca3af; font-size: 9px; } #hud .usage-val { font-size: 10px; } #hud .usage-sub { color: #6b7280; font-size: 9px; }
-        #hud .usage-UNKNOWN .usage-val { color: #94a3b8; } #hud .usage-WAITING_LIMIT .usage-val { color: #fbbf24; } #hud .usage-AVAILABLE .usage-val { color: #86efac; }
+        #hud .usage { display: flex; flex-direction: column; line-height: 1.15; min-width: 142px; }
+        #hud .usage-name { color: #9ca3af; font-size: 9px; } #hud .usage-val { font-size: 10px; white-space: pre-line; } #hud .usage-sub { color: #6b7280; font-size: 9px; }
+        #hud .usage-UNKNOWN .usage-val, #hud .usage-STALE .usage-val { color: #94a3b8; } #hud .usage-WAITING_LIMIT .usage-val, #hud .usage-LOW .usage-val { color: #fbbf24; } #hud .usage-CRITICAL .usage-val, #hud .usage-ERROR .usage-val { color: #f87171; } #hud .usage-AVAILABLE .usage-val { color: #86efac; }
         #mapStage { position: relative; }
         .cc-plaque { position: absolute; width: 32px; height: 32px; z-index: 6; color: #1b1f29; font: bold 14px "Courier New", monospace; display: flex; align-items: center; justify-content: center; }
         .cc-plaque.unlocked { background: radial-gradient(#fde68a, #c9a227); border: 1px solid #fff7d6; border-radius: 3px; box-shadow: 0 0 8px #e0b83a; }

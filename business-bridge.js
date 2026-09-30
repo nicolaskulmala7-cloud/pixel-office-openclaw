@@ -10,7 +10,7 @@ const path = require('path');
 
 const clip = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f]+/g, ' ').slice(0, n);
 const STATES = ['RUNNING', 'STOPPING', 'STOPPED', 'STARTING', 'DEGRADED', 'UNKNOWN'];
-const USAGE_STATES = ['AVAILABLE', 'WAITING_LIMIT', 'UNKNOWN'];
+const USAGE_STATES = ['AVAILABLE', 'LOW', 'CRITICAL', 'LIMITED', 'WAITING_LIMIT', 'STALE', 'ERROR', 'UNKNOWN'];
 
 function resolveCli(env = process.env) {
   const p = env.BUSINESS_OS_UI_STATUS_CLI || path.join(env.BUSINESS_OS_ROOT || path.join(os.homedir(), 'business-os'), 'ops', 'bos-ui-status.js');
@@ -32,8 +32,9 @@ function sanitise(raw) {
   const g = raw.global || {};
   const lvl = raw.level || {};
   const usage = (u) => (u && USAGE_STATES.includes(u.status)
-    ? { status: u.status, percent_used: Number.isFinite(u.percent_used) ? Math.max(0, Math.min(100, Math.round(u.percent_used))) : null, reset_at: clip(u.reset_at, 40) || null, reason: clip(u.reason, 140) || null, detected_at: clip(u.detected_at, 40) || null }
-    : { status: 'UNKNOWN', percent_used: null, reset_at: null, reason: 'no data', detected_at: null });
+    ? { status: u.status, percent_used: Number.isFinite(u.percent_used) ? Math.max(0, Math.min(100, Math.round(u.percent_used))) : null, reset_at: clip(u.reset_at, 40) || null, reason: clip(u.reason, 140) || null, detected_at: clip(u.detected_at, 40) || null, source: clip(u.source, 40) || null,
+      windows: (Array.isArray(u.windows) ? u.windows : []).slice(0, 4).map((w) => ({ name: clip(w && w.name, 20), used_pct: Number.isFinite(w && w.used_pct) ? Math.max(0, Math.min(100, Math.round(w.used_pct))) : null, resets_at: clip(w && w.resets_at, 40) || null })) }
+    : { status: 'UNKNOWN', percent_used: null, reset_at: null, reason: 'no data', detected_at: null, source: null, windows: [] });
   const board = (b) => ({ board: b && (b.board === 'PAPER' || b.board === 'REAL') ? b.board : 'UNKNOWN', unit: clip(b && b.unit, 20), ranking: clip(b && b.ranking, 20), rows: (b && Array.isArray(b.rows) ? b.rows : []).slice(0, 20).map((r) => ({ agent: clip(r.agent, 40), n: num(r.n), pnl: num(r.pnl), roi: num(r.roi), win_rate: num(r.win_rate), max_drawdown: num(r.max_drawdown), opportunities_found: num(r.opportunities_found), approved_executions: num(r.approved_executions), sample: clip(r.sample, 40) })) });
   return {
     available: true,

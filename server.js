@@ -736,13 +736,14 @@ app.get('/api/overview', async (req, res) => {
     }));
     const startag = workers.find(w => w.id === 'startag_50k');
     const proofreader = startag && !startag.stale && startag.details && startag.details.proofreader ? startag.details.proofreader.state : null;
+    const observedCodex = bos.available && bos.usage.codex && bos.usage.codex.status !== 'UNKNOWN' ? bos.usage.codex : codexUsage(startag);
     res.json({
       generatedAt: now,
       bos,
       workers,
       usage: {
         claude: bos.available ? bos.usage.claude : UNKNOWN_USAGE('Business OS status unavailable'),
-        codex: codexUsage(startag),
+        codex: observedCodex,
         chatgpt: UNKNOWN_USAGE('interactive ChatGPT Chat exposes no usage to the VPS', { proofreader })
       },
       activity: activity.list(30)
