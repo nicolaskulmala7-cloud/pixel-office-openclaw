@@ -28,6 +28,7 @@ const BOS = (over = {}) => ({
   level: { level: 0, net_eur: 0, next_level: 1, next_threshold_eur: 1, progress: 0, events_counted: 0 },
   achievements: [{ id: 'first_euro', title: 'First Euro', unlocked: false }],
   leaderboards: { paper: { board: 'PAPER', rows: [] }, real: { board: 'REAL', rows: [] } },
+  paper_race: { id: 'race', status: 'ACTIVE', mode: 'PAPER_DEMO_ONLY', live_mode: 'LIVE_DISABLED', currency: 'DEMO_EUR', starting_balance: 100, target_balance: 300, leader: { agent: 'market_trader', balance: 100, progress: 0, state: 'RACING' }, rows: [{ agent: 'market_trader', start: 100, balance: 100, verified_balance: 100, pnl: 0, settled: 0, progress: 0, state: 'RACING' }] },
   agents: [{ id: 'coordinator', display: 'Diktator', model: 'Opus 5.5', tier: 'strong' }],
   usage: { claude: { status: 'UNKNOWN', reason: 'usage.status providers: []' } },
   secret_path: '/home/x/.env', token: 'sk-should-not-pass',
@@ -41,6 +42,7 @@ test('bridge sanitiser: drops unknown fields, clamps usage, never invents a perc
   assert.deepEqual([s.usage.chatgpt.status, s.usage.chatgpt.percent_used], ['UNKNOWN', null]);
   assert.doesNotMatch(JSON.stringify(s), /sk-should-not-pass|\.env/);
   assert.equal(sanitise({ global: { system: 'PWNED' } }).global.system, 'UNKNOWN');
+  assert.deepEqual([s.paper_race.starting_balance, s.paper_race.target_balance, s.paper_race.live_mode], [100, 300, 'LIVE_DISABLED']);
 });
 
 test('overview without Business OS: everything UNKNOWN, nothing fabricated', async (t) => {
@@ -103,6 +105,9 @@ test('view models: FAILED highlighted, usage bar only from real numbers, plaques
   const pl = CC.plaquesModel([{ x: 1, y: 1 }, { x: 2, y: 1 }], [{ id: 'a', title: 'A', unlocked: true }, { id: 'b', title: 'B', unlocked: 'yes' }]);
   assert.deepEqual(pl.map((p) => p.unlocked), [true, false], 'only a literal true unlocks');
   assert.equal(CC.levelModel({ level: 3, net_eur: 40, next_threshold_eur: 100, progress: 0.2 }).text, 'LVL 3');
+  const race = CC.raceModel(BOS().paper_race);
+  assert.match(race.leader, /market_trader 100\.00/);
+  assert.equal(race.fraction, 0);
 });
 
 test('activity feed is bounded, collapses repeats, and persists', () => {

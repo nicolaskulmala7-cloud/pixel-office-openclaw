@@ -69,6 +69,19 @@
     };
   }
 
+  function raceModel(race) {
+    if (!race || !Array.isArray(race.rows) || !race.rows.length) return { title: 'DEMO RACE', leader: 'UNKNOWN', detail: 'paper race unavailable', fraction: 0 };
+    const leader = race.leader || race.rows[0];
+    const target = Number.isFinite(race.target_balance) ? race.target_balance : 300;
+    const balance = Number.isFinite(leader.balance) ? leader.balance : null;
+    return {
+      title: race.status === 'FINISHED' ? 'WINNER' : 'DEMO RACE',
+      leader: (leader.agent || 'UNKNOWN') + (balance === null ? '' : ' ' + balance.toFixed(2)),
+      detail: 'DEMO_EUR / ' + target + ' · ' + (leader.state || race.status || 'UNKNOWN'),
+      fraction: Number.isFinite(leader.progress) ? Math.max(0, Math.min(1, leader.progress)) : 0,
+    };
+  }
+
   function usageModel(label, u) {
     const s = u || { status: 'UNKNOWN' };
     const windows = (Array.isArray(s.windows) ? s.windows : []).filter((w) => Number.isFinite(w && w.used_pct));
@@ -199,7 +212,7 @@
     // HUD groups
     hud.textContent = '';
     const groups = {};
-    for (const [key, title] of [['work', 'WORK'], ['infra', 'INFRA'], ['global', 'GLOBAL'], ['level', 'BUSINESS'], ['usage', 'USAGE']]) {
+    for (const [key, title] of [['work', 'WORK'], ['infra', 'INFRA'], ['global', 'GLOBAL'], ['level', 'BUSINESS'], ['race', 'DEMO RACE'], ['usage', 'USAGE']]) {
       const g = el('div', 'hud-group hud-' + key);
       g.appendChild(el('span', 'hud-title', title));
       hud.appendChild(g);
@@ -213,6 +226,9 @@
     const lvl = { name: el('b', 'lvl-name', 'LVL ?'), detail: el('span', 'lvl-detail', ''), bar: el('span', 'lvl-bar', '') };
     groups.level.appendChild(lvl.name); groups.level.appendChild(lvl.detail); groups.level.appendChild(lvl.bar);
     groups.level.title = 'Business Level from VERIFIED realized net profit only';
+    const race = { leader: el('b', 'race-leader', 'UNKNOWN'), detail: el('span', 'race-detail', ''), bar: el('span', 'race-bar', '') };
+    groups.race.appendChild(race.leader); groups.race.appendChild(race.detail); groups.race.appendChild(race.bar);
+    groups.race.title = 'Fake money only · PAPER_DEMO_ONLY · LIVE_DISABLED';
     const usageNodes = {};
     for (const [k, label] of [['chatgpt', 'CHATGPT'], ['codex', 'CODEX'], ['claude', 'CLAUDE']]) {
       const u = el('div', 'usage');
@@ -250,6 +266,8 @@
       const bos = overview && overview.bos;
       const lm = levelModel(bos && bos.available ? bos.level : null);
       lvl.name.textContent = lm.text; lvl.detail.textContent = lm.detail; lvl.bar.textContent = lm.bar;
+      const rm = raceModel(bos && bos.available ? bos.paper_race : null);
+      race.leader.textContent = rm.leader; race.detail.textContent = rm.detail; race.bar.textContent = bar(rm.fraction, 10);
       const usage = (overview && overview.usage) || {};
       for (const [k, n] of Object.entries(usageNodes)) {
         const um = usageModel(k, usage[k]);
@@ -364,5 +382,5 @@
     return { refresh, render, renderHud, get overview() { return overview; }, agentMeta: (id) => agentMeta(id, overview), workerModel };
   }
 
-  return { hudModel, levelModel, usageModel, plaquesModel, agentMeta, workerModel, activityModel, externalRoomModel, mount, OVERVIEW_URL, POLL_MS };
+  return { hudModel, levelModel, raceModel, usageModel, plaquesModel, agentMeta, workerModel, activityModel, externalRoomModel, mount, OVERVIEW_URL, POLL_MS };
 });
