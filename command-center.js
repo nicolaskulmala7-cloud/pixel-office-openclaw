@@ -77,7 +77,7 @@
     return {
       title: race.status === 'FINISHED' ? 'WINNER' : 'DEMO RACE',
       leader: (leader.agent || 'UNKNOWN') + (balance === null ? '' : ' ' + balance.toFixed(2)),
-      detail: 'DEMO_EUR / ' + target + ' · ' + (leader.state || race.status || 'UNKNOWN'),
+      detail: 'DEMO_EUR / ' + target + ' · OPEN ' + (Number.isFinite(leader.open_intents) ? leader.open_intents : 0) + ' · SETTLED ' + (Number.isFinite(leader.settled) ? leader.settled : 0) + ' · ' + (leader.state || race.status || 'UNKNOWN'),
       fraction: Number.isFinite(leader.progress) ? Math.max(0, Math.min(1, leader.progress)) : 0,
     };
   }

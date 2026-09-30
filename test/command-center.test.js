@@ -28,7 +28,7 @@ const BOS = (over = {}) => ({
   level: { level: 0, net_eur: 0, next_level: 1, next_threshold_eur: 1, progress: 0, events_counted: 0 },
   achievements: [{ id: 'first_euro', title: 'First Euro', unlocked: false }],
   leaderboards: { paper: { board: 'PAPER', rows: [] }, real: { board: 'REAL', rows: [] } },
-  paper_race: { id: 'race', status: 'ACTIVE', mode: 'PAPER_DEMO_ONLY', live_mode: 'LIVE_DISABLED', currency: 'DEMO_EUR', starting_balance: 100, target_balance: 300, leader: { agent: 'market_trader', balance: 100, progress: 0, state: 'RACING' }, rows: [{ agent: 'market_trader', start: 100, balance: 100, verified_balance: 100, pnl: 0, settled: 0, progress: 0, state: 'RACING' }] },
+  paper_race: { id: 'race', status: 'ACTIVE', mode: 'PAPER_DEMO_ONLY', live_mode: 'LIVE_DISABLED', currency: 'DEMO_EUR', starting_balance: 100, target_balance: 300, leader: { agent: 'market_trader', balance: 100, open_intents: 1, settled: 0, progress: 0, state: 'RACING' }, rows: [{ agent: 'market_trader', start: 100, balance: 100, verified_balance: 100, pnl: 0, settled: 0, open_intents: 1, open_stake: 10, progress: 0, state: 'RACING' }] },
   agents: [{ id: 'coordinator', display: 'Diktator', model: 'Opus 5.5', tier: 'strong' }],
   usage: { claude: { status: 'UNKNOWN', reason: 'usage.status providers: []' } },
   secret_path: '/home/x/.env', token: 'sk-should-not-pass',
@@ -107,6 +107,7 @@ test('view models: FAILED highlighted, usage bar only from real numbers, plaques
   assert.equal(CC.levelModel({ level: 3, net_eur: 40, next_threshold_eur: 100, progress: 0.2 }).text, 'LVL 3');
   const race = CC.raceModel(BOS().paper_race);
   assert.match(race.leader, /market_trader 100\.00/);
+  assert.match(race.detail, /OPEN 1 · SETTLED 0/);
   assert.equal(race.fraction, 0);
 });
 
