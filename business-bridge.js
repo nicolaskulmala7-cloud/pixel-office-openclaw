@@ -37,7 +37,7 @@ function sanitise(raw) {
     : { status: 'UNKNOWN', percent_used: null, reset_at: null, reason: 'no data', detected_at: null, source: null, windows: [] });
   const board = (b) => ({ board: b && (b.board === 'PAPER' || b.board === 'REAL') ? b.board : 'UNKNOWN', unit: clip(b && b.unit, 20), ranking: clip(b && b.ranking, 20), rows: (b && Array.isArray(b.rows) ? b.rows : []).slice(0, 20).map((r) => ({ agent: clip(r.agent, 40), n: num(r.n), pnl: num(r.pnl), roi: num(r.roi), win_rate: num(r.win_rate), max_drawdown: num(r.max_drawdown), opportunities_found: num(r.opportunities_found), approved_executions: num(r.approved_executions), sample: clip(r.sample, 40) })) });
   const pr = raw.paper_race || {};
-  const raceRow = (r) => ({ agent: clip(r && r.agent, 40), risk_multiplier: num(r && r.risk_multiplier), start: num(r && r.start), balance: num(r && r.balance), verified_balance: num(r && r.verified_balance), pnl: num(r && r.pnl), settled: num(r && r.settled), open_intents: num(r && r.open_intents), open_stake: num(r && r.open_stake), progress: num(r && r.progress), state: clip(r && r.state, 40) });
+  const raceRow = (r) => ({ agent: clip(r && r.agent, 40), risk_multiplier: num(r && r.risk_multiplier), start: num(r && r.start), balance: num(r && r.balance), verified_balance: num(r && r.verified_balance), risk_balance: num(r && r.risk_balance), available_balance: num(r && r.available_balance), max_new_stake: num(r && r.max_new_stake), pnl: num(r && r.pnl), settled: num(r && r.settled), open_intents: num(r && r.open_intents), open_stake: num(r && r.open_stake), progress: num(r && r.progress), state: clip(r && r.state, 40) });
   return {
     available: true,
     generated_at: clip(raw.generated_at, 40),
