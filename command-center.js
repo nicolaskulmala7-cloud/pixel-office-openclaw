@@ -79,12 +79,14 @@
     const rows = race.rows.map((r, i) => {
       const rr = Number.isFinite(r.risk_multiplier) ? r.risk_multiplier.toFixed(2) + '×' : '?';
       const rb = Number.isFinite(r.balance) ? r.balance.toFixed(2) : '?';
-      return (i + 1) + '. ' + (r.agent || 'UNKNOWN') + ' · ' + rb + ' DEMO_EUR · RISK ' + rr;
+      const cap = Number.isFinite(r.max_new_stake) ? r.max_new_stake.toFixed(2) : '?';
+      const avail = Number.isFinite(r.available_balance) ? r.available_balance.toFixed(2) : '?';
+      return (i + 1) + '. ' + (r.agent || 'UNKNOWN') + ' · ' + rb + ' DEMO_EUR · RISK ' + rr + ' · CAP ' + cap + ' · AVAIL ' + avail;
     });
     return {
       title: race.status === 'FINISHED' ? 'WINNER' : (paused ? 'RACE PAUSED' : 'DEMO RACE'),
       leader: (leader.agent || 'UNKNOWN') + (balance === null ? '' : ' ' + balance.toFixed(2)),
-      detail: 'DEMO_EUR / ' + target + ' · RISK ' + risk + ' · OPEN ' + (Number.isFinite(leader.open_intents) ? leader.open_intents : 0) + ' · SETTLED ' + (Number.isFinite(leader.settled) ? leader.settled : 0) + ' · ' + (paused ? 'PAUSED @ CUTOFF' : (leader.state || race.status || 'UNKNOWN')),
+      detail: 'DEMO_EUR / ' + target + ' · RISK ' + risk + ' · CAP ' + (Number.isFinite(leader.max_new_stake) ? leader.max_new_stake.toFixed(2) : '?') + ' · AVAIL ' + (Number.isFinite(leader.available_balance) ? leader.available_balance.toFixed(2) : '?') + ' · OPEN ' + (Number.isFinite(leader.open_intents) ? leader.open_intents : 0) + ' · SETTLED ' + (Number.isFinite(leader.settled) ? leader.settled : 0) + ' · ' + (paused ? 'PAUSED @ CUTOFF' : (leader.state || race.status || 'UNKNOWN')),
       fraction: Number.isFinite(leader.progress) ? Math.max(0, Math.min(1, leader.progress)) : 0,
       tooltip: rows.join('\n') + (race.pause_at ? '\nCutoff: ' + race.pause_at : ''),
     };
