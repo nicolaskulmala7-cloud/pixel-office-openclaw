@@ -62,6 +62,8 @@
         <canvas id="gameCanvas" width="640" height="800"></canvas>
         <div id="ui">
             <div>Tiempo: <span id="timer">0</span>s</div>
+            <div>Claude: <span id="claudeUsage">UNKNOWN</span></div>
+            <div id="claudeUsageMeta" style="font-size:10px;opacity:.75;">STALE / no live sample</div>
         </div>
     </div>
 
@@ -1768,6 +1770,43 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
         }, 2000);
 
         updateFilterButtons();
+
+        async function loadUsageStatus() {
+            const usageEl = document.getElementById('claudeUsage');
+            const metaEl = document.getElementById('claudeUsageMeta');
+            if (!usageEl || !metaEl) return;
+
+            try {
+                const response = await fetch('/api/usage', { cache: 'no-store' });
+                const payload = await response.json();
+                const claude = payload && payload.claude ? payload.claude : payload;
+
+                const windows = Array.isArray(claude && claude.windows) ? claude.windows : [];
+                const state = (claude && claude.state) || (claude && claude.stale ? 'STALE' : 'UNKNOWN');
+
+                if (windows.length) {
+                    const parts = windows.map(w => {
+                        const label = w.name || w.window || 'usage';
+                        if (Number.isFinite(w.used_pct)) return `${label} ${w.used_pct}% used`;
+                        if (Number.isFinite(w.remaining_pct)) return `${label} ${w.remaining_pct}% left`;
+                        return label;
+                    });
+                    usageEl.textContent = parts.join(' · ');
+                } else {
+                    usageEl.textContent = state === 'UNKNOWN' ? 'UNKNOWN/STALE' : state;
+                }
+
+                const sampledAt = claude && claude.sampled_at ? new Date(claude.sampled_at).toLocaleString() : 'no live sample';
+                const source = claude && claude.source ? claude.source : 'none';
+                metaEl.textContent = `${state} · ${sampledAt} · ${source}`;
+            } catch (e) {
+                usageEl.textContent = 'UNKNOWN/STALE';
+                metaEl.textContent = 'usage endpoint unavailable';
+            }
+        }
+
+        loadUsageStatus();
+        setInterval(loadUsageStatus, 30000);
 
         // Iniciar
         gameLoop();
