@@ -28,7 +28,7 @@ const BOS = (over = {}) => ({
   level: { level: 0, net_eur: 0, next_level: 1, next_threshold_eur: 1, progress: 0, events_counted: 0 },
   achievements: [{ id: 'first_euro', title: 'First Euro', unlocked: false }],
   leaderboards: { paper: { board: 'PAPER', rows: [] }, real: { board: 'REAL', rows: [] } },
-  paper_race: { id: 'race', status: 'ACTIVE', mode: 'PAPER_DEMO_ONLY', live_mode: 'LIVE_DISABLED', currency: 'DEMO_EUR', starting_balance: 100, target_balance: 300, pause_at: '2026-10-01T21:00:00Z', paused: false, leader: { agent: 'market_trader', risk_multiplier: 1.1, balance: 100, open_intents: 1, settled: 0, progress: 0, state: 'RACING' }, rows: [{ agent: 'market_trader', risk_multiplier: 1.1, start: 100, balance: 100, verified_balance: 100, pnl: 0, settled: 0, open_intents: 1, open_stake: 10, progress: 0, state: 'RACING' }] },
+  paper_race: { id: 'race', status: 'ACTIVE', mode: 'PAPER_DEMO_ONLY', live_mode: 'LIVE_DISABLED', currency: 'DEMO_EUR', starting_balance: 100, target_balance: 300, pause_at: null, paused: false, leader: { agent: 'market_trader', risk_multiplier: 4.5, balance: 100, verified_balance: 100, risk_balance: 100, available_balance: 90, max_new_stake: 81, open_intents: 1, open_stake: 10, settled: 0, progress: 0, state: 'RACING' }, rows: [{ agent: 'market_trader', risk_multiplier: 4.5, start: 100, balance: 100, verified_balance: 100, risk_balance: 100, available_balance: 90, max_new_stake: 81, pnl: 0, settled: 0, open_intents: 1, open_stake: 10, progress: 0, state: 'RACING' }] },
   agents: [{ id: 'coordinator', display: 'Diktator', model: 'Opus 5.5', tier: 'strong' }],
   usage: { claude: { status: 'UNKNOWN', reason: 'usage.status providers: []' } },
   secret_path: '/home/x/.env', token: 'sk-should-not-pass',
@@ -43,8 +43,9 @@ test('bridge sanitiser: drops unknown fields, clamps usage, never invents a perc
   assert.doesNotMatch(JSON.stringify(s), /sk-should-not-pass|\.env/);
   assert.equal(sanitise({ global: { system: 'PWNED' } }).global.system, 'UNKNOWN');
   assert.deepEqual([s.paper_race.starting_balance, s.paper_race.target_balance, s.paper_race.live_mode], [100, 300, 'LIVE_DISABLED']);
-  assert.equal(s.paper_race.rows[0].risk_multiplier, 1.1);
-  assert.equal(s.paper_race.pause_at, '2026-10-01T21:00:00Z');
+  assert.equal(s.paper_race.rows[0].risk_multiplier, 4.5);
+  assert.deepEqual([s.paper_race.rows[0].available_balance, s.paper_race.rows[0].max_new_stake], [90, 81]);
+  assert.equal(s.paper_race.pause_at, null);
 });
 
 test('overview without Business OS: everything UNKNOWN, nothing fabricated', async (t) => {
@@ -109,8 +110,8 @@ test('view models: FAILED highlighted, usage bar only from real numbers, plaques
   assert.equal(CC.levelModel({ level: 3, net_eur: 40, next_threshold_eur: 100, progress: 0.2 }).text, 'LVL 3');
   const race = CC.raceModel(BOS().paper_race);
   assert.match(race.leader, /market_trader 100\.00/);
-  assert.match(race.detail, /RISK 1\.10× · OPEN 1 · SETTLED 0/);
-  assert.match(race.tooltip, /market_trader · 100\.00 DEMO_EUR · RISK 1\.10×/);
+  assert.match(race.detail, /RISK 4\.50× · CAP 81\.00 · AVAIL 90\.00 · OPEN 1 · SETTLED 0/);
+  assert.match(race.tooltip, /market_trader · 100\.00 DEMO_EUR · RISK 4\.50× · CAP 81\.00 · AVAIL 90\.00/);
   assert.equal(race.fraction, 0);
   const pausedRace = CC.raceModel({ ...BOS().paper_race, status: 'PAUSED_CUTOFF', paused: true });
   assert.equal(pausedRace.title, 'RACE PAUSED');
