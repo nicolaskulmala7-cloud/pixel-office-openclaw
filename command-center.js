@@ -70,15 +70,23 @@
   }
 
   function raceModel(race) {
-    if (!race || !Array.isArray(race.rows) || !race.rows.length) return { title: 'DEMO RACE', leader: 'UNKNOWN', detail: 'paper race unavailable', fraction: 0 };
+    if (!race || !Array.isArray(race.rows) || !race.rows.length) return { title: 'DEMO RACE', leader: 'UNKNOWN', detail: 'paper race unavailable', fraction: 0, tooltip: '' };
     const leader = race.leader || race.rows[0];
     const target = Number.isFinite(race.target_balance) ? race.target_balance : 300;
     const balance = Number.isFinite(leader.balance) ? leader.balance : null;
+    const risk = Number.isFinite(leader.risk_multiplier) ? leader.risk_multiplier.toFixed(2) + '×' : '?';
+    const paused = race.status === 'PAUSED_CUTOFF' || race.paused === true;
+    const rows = race.rows.map((r, i) => {
+      const rr = Number.isFinite(r.risk_multiplier) ? r.risk_multiplier.toFixed(2) + '×' : '?';
+      const rb = Number.isFinite(r.balance) ? r.balance.toFixed(2) : '?';
+      return (i + 1) + '. ' + (r.agent || 'UNKNOWN') + ' · ' + rb + ' DEMO_EUR · RISK ' + rr;
+    });
     return {
-      title: race.status === 'FINISHED' ? 'WINNER' : 'DEMO RACE',
+      title: race.status === 'FINISHED' ? 'WINNER' : (paused ? 'RACE PAUSED' : 'DEMO RACE'),
       leader: (leader.agent || 'UNKNOWN') + (balance === null ? '' : ' ' + balance.toFixed(2)),
-      detail: 'DEMO_EUR / ' + target + ' · OPEN ' + (Number.isFinite(leader.open_intents) ? leader.open_intents : 0) + ' · SETTLED ' + (Number.isFinite(leader.settled) ? leader.settled : 0) + ' · ' + (leader.state || race.status || 'UNKNOWN'),
+      detail: 'DEMO_EUR / ' + target + ' · RISK ' + risk + ' · OPEN ' + (Number.isFinite(leader.open_intents) ? leader.open_intents : 0) + ' · SETTLED ' + (Number.isFinite(leader.settled) ? leader.settled : 0) + ' · ' + (paused ? 'PAUSED @ CUTOFF' : (leader.state || race.status || 'UNKNOWN')),
       fraction: Number.isFinite(leader.progress) ? Math.max(0, Math.min(1, leader.progress)) : 0,
+      tooltip: rows.join('\n') + (race.pause_at ? '\nCutoff: ' + race.pause_at : ''),
     };
   }
 
@@ -267,7 +275,7 @@
       const lm = levelModel(bos && bos.available ? bos.level : null);
       lvl.name.textContent = lm.text; lvl.detail.textContent = lm.detail; lvl.bar.textContent = lm.bar;
       const rm = raceModel(bos && bos.available ? bos.paper_race : null);
-      race.leader.textContent = rm.leader; race.detail.textContent = rm.detail; race.bar.textContent = bar(rm.fraction, 10);
+      race.leader.textContent = rm.leader; race.detail.textContent = rm.detail; race.bar.textContent = bar(rm.fraction, 10); groups.race.title = rm.tooltip || 'Fake money only · PAPER_DEMO_ONLY · LIVE_DISABLED';
       const usage = (overview && overview.usage) || {};
       for (const [k, n] of Object.entries(usageNodes)) {
         const um = usageModel(k, usage[k]);
