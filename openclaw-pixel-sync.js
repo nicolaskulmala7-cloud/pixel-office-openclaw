@@ -577,7 +577,8 @@ const computeStatus = (id) => {
   if (agentIsActive(id)) {
     const running = mine.find(t => t.status === 'running') || mine.find(t => t.status === 'queued');
     const workerActive = AGENT_MAP.some(m => m.openclaw !== COORDINATOR && agentIsActive(m.openclaw));
-    const status = id === COORDINATOR && workerActive ? 'DELEGATING' : (WORK_VERB[id] || 'WORKING');
+    const researching = isResearchTask(running);
+    const status = id === COORDINATOR && workerActive ? 'DELEGATING' : (researching ? 'RESEARCHING' : (WORK_VERB[id] || 'WORKING'));
     // The ledger can close a task a moment before the session goes idle: keep showing it until then.
     if (running) activeTask.set(id, { task: running.title, taskId: running.id });
     const shown = running ? { task: running.title, taskId: running.id } : (activeTask.get(id) || { task: '', taskId: '' });
@@ -667,7 +668,7 @@ const pushAgent = async (id, { force = false } = {}) => {
     }
     applied.set(id, { ...target, tile });
     markPixelReachable(true);
-    const where = target.state === 'working' ? layout.room : layout.idleRoom;
+    const where = target.mode === 'research' ? layout.researchRoom : (target.state === 'working' ? layout.room : layout.idleRoom);
     log(`[sync] ${id} -> ${target.state}${target.label ? ` (${target.label})` : ''} @ ${where}${tile ? ` (${tile.x},${tile.y})` : ''}`);
   } catch (e) {
     markPixelReachable(false, e);
