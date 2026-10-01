@@ -240,6 +240,19 @@ const refreshLayout = async () => {
   const idleRoom = roomList.find(r => r && r.name === idleRoomName);
   if (!idleRoom) log(`[pixel] WARNING idle room "${idleRoomName}" not found; idle agents stay in their work rooms`);
 
+  // Research jobs are visualised in the shared Research Lab regardless of the
+  // agent's normal specialist room. Allocate one deterministic, distinct tile
+  // per agent so simultaneous research jobs do not stack sprites on top of each other.
+  const researchRoomName = 'Research Lab';
+  const researchRoom = roomList.find(r => r && r.name === researchRoomName);
+  const takenResearch = new Set();
+  const researchFor = () => {
+    if (!researchRoom) return null;
+    const t = pickRoomTile(researchRoom, collision, takenResearch);
+    if (t) takenResearch.add(`${t.x},${t.y}`);
+    return t ? { x: t.x, y: t.y } : null;
+  };
+
   // Distinct idle seats: agent i takes the i-th valid idle target; gaps are filled deterministically.
   const idleList = (Array.isArray(targets.idle) ? targets.idle : []).filter(t => validTarget(t, idleRoom, collision));
   const takenIdle = new Set();
@@ -276,9 +289,12 @@ const refreshLayout = async () => {
     }
     const useOverride = override && validTarget(override, overrideRoom, collision);
     const idleTile = useOverride ? { x: override.x, y: override.y } : (idleRoom ? idleFor(index) : null);
+    const researchTile = researchFor();
     layout.set(m.openclaw, {
       pixelId: agent.id, name: agent.name, slot: agent.color, room: m.room, tile,
-      idleRoom: useOverride ? override.room : (idleTile ? idleRoomName : m.room), idleTile: idleTile || tile
+      idleRoom: useOverride ? override.room : (idleTile ? idleRoomName : m.room), idleTile: idleTile || tile,
+      researchRoom: researchTile ? researchRoomName : m.room,
+      researchTile: researchTile || tile
     });
   });
   const changed = JSON.stringify([...layout]) !== JSON.stringify([...pixel.layout]);
@@ -287,7 +303,7 @@ const refreshLayout = async () => {
   if (changed) {
     const fmt = (t) => (t ? `(${t.x},${t.y})` : 'none');
     for (const [oc, l] of layout) {
-      log(`[pixel] map ${oc} -> Pixel Office "${l.pixelId}" slot ${l.slot} "${l.name}": work ${l.room} ${fmt(l.tile)}, idle ${l.idleRoom} ${fmt(l.idleTile)}`);
+      log(`[pixel] map ${oc} -> Pixel Office "${l.pixelId}" slot ${l.slot} "${l.name}": work ${l.room} ${fmt(l.tile)}, research ${l.researchRoom} ${fmt(l.researchTile)}, idle ${l.idleRoom} ${fmt(l.idleTile)}`);
     }
     if (!collision) log('[pixel] WARNING collision map unavailable; using unfiltered room tiles');
   }
@@ -319,22 +335,43 @@ const agentIsActive = (agentId) => {
   return false;
 };
 
+const isResearchTask = (task) => {
+  if (!task) return false;
+  const kind = String(task.kind || '').toLowerCase();
+  const id = String(task.id || '').toLowerCase();
+  const title = String(task.title || '').toLowerCase();
+  return kind === 'research' ||
+    id.startsWith('research-') ||
+    title.startsWith('research-') ||
+    title.includes('[research]') ||
+    title.includes('continuous empirical research');
+};
+
 const computeDesired = () => {
   const result = new Map();
   const workerActive = AGENT_MAP.some(m => m.openclaw !== COORDINATOR && agentIsActive(m.openclaw));
   for (const m of AGENT_MAP) {
     if (!agentIsActive(m.openclaw)) {
-      result.set(m.openclaw, { state: 'idle', label: '' });
-    } else if (m.openclaw === COORDINATOR) {
-      result.set(m.openclaw, { state: 'working', label: workerActive ? 'Delegating' : 'Working' });
+      result.set(m.openclaw, { state: 'idle', mode: 'idle', label: '' });
+      continue;
+    }
+
+    const mine = recentTasks().filter((t) => t.agentId === m.openclaw);
+    const running = mine.find((t) => t.status === 'running') || mine.find((t) => t.status === 'queued');
+    const researching = isResearchTask(running);
+
+    if (m.openclaw === COORDINATOR) {
+      result.set(m.openclaw, { state: 'working', mode: 'work', label: workerActive ? 'Delegating' : 'Working' });
+    } else if (researching) {
+      result.set(m.openclaw, { state: 'working', mode: 'research', label: 'Researching' });
     } else {
-      result.set(m.openclaw, { state: 'working', label: 'Working' });
+      result.set(m.openclaw, { state: 'working', mode: 'work', label: 'Working' });
     }
   }
   return result;
 };
 
-const sameTarget = (a, b) => a && b && a.state === b.state && a.label === b.label;
+const sameTarget = (a, b) => a && b && a.state === b.state && a.mode === b.mode && a.label === b.label;
 
 const recompute = () => {
   const next = computeDesired();
@@ -346,7 +383,7 @@ const recompute = () => {
         idleTimers.set(id, setTimeout(() => {
           idleTimers.delete(id);
           if (!agentIsActive(id)) {
-            desired.set(id, { state: 'idle', label: '' });
+            desired.set(id, { state: 'idle', mode: 'idle', label: '' });
             pushAgent(id).catch(() => {});
           }
         }, IDLE_DEBOUNCE_MS));
@@ -606,8 +643,8 @@ const sendHeartbeat = async () => {
 // ---------------------------------------------------------------------------
 // Push state into Pixel Office
 
-// Where an agent should be for a target state: work tile when working, its own lounge seat when idle.
-const targetTile = (layout, target) => (target.state === 'working' ? layout.tile : layout.idleTile);
+// Where an agent should be: Research Lab for research tasks, specialist room for other work, lounge/override when idle.
+const targetTile = (layout, target) => target.mode === 'research' ? layout.researchTile : (target.state === 'working' ? layout.tile : layout.idleTile);
 const tileCenterPx = (t) => ({ x: t.x * TILE + TILE / 2, y: t.y * TILE + TILE / 2 });
 
 const pushAgent = async (id, { force = false } = {}) => {
