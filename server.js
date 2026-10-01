@@ -29,6 +29,7 @@ const LOG_PATH = dataPath('pixel_actions.jsonl');
 const MAP_PATH = dataPath('map.json');
 const COLLISION_PATH = dataPath('pixel_collision.json');
 const ROOMS_PATH = dataPath('pixel_rooms.json');
+const USAGE_PATH = dataPath('usage.json');
 const agentMessagePath = (id) => dataPath(`agent_${id}_message.txt`);
 const ARRIVED_OFFICE_PATH = dataPath('pep_arrived_office');
 const ARRIVED_RECEPTION_PATH = dataPath('pep_arrived_reception');
@@ -164,6 +165,23 @@ app.get('/api/config', (req, res) => {
     agents: config.agents,
     rooms: config.rooms
   });
+});
+
+app.get('/api/usage', (req, res) => {
+  const fallback = {
+    claude: {
+      provider: 'claude',
+      state: 'UNKNOWN',
+      stale: true,
+      windows: [],
+      sampled_at: null,
+      source: 'none',
+      note: 'No live Claude /usage sample is available; do not estimate.'
+    }
+  };
+
+  const usage = readJSONFile(USAGE_PATH);
+  res.json(usage && typeof usage === 'object' ? usage : fallback);
 });
 
 console.log('Dashboard auth route ready');
