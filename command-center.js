@@ -94,22 +94,25 @@
 
   function usageModel(label, u) {
     const s = u || { status: 'UNKNOWN' };
+    const running = String(label).toLowerCase() === 'codex' && s.run_state === 'RUNNING';
     const windows = (Array.isArray(s.windows) ? s.windows : []).filter((w) => Number.isFinite(w && w.used_pct));
     if (windows.length) {
       return {
         label, kind: 'windows', percent: Math.max(...windows.map((w) => w.used_pct)),
         text: windows.map((w) => String(w.name || '?').toUpperCase() + ' ' + bar(w.used_pct / 100, 10) + ' ' + w.used_pct + '%').join('\n'),
-        sub: (s.status === 'STALE' ? 'STALE · ' : '') + (s.detected_at ? 'seen ' + ago(s.detected_at) + ' ago' : ''),
+        sub: (running ? 'RUNNING · ' : '') + (s.status === 'STALE' ? 'STALE · ' : '') + (s.detected_at ? 'seen ' + ago(s.detected_at) + ' ago' : ''),
         reason: s.reason || '', status: s.status,
       };
     }
     if (Number.isFinite(s.percent_used)) {
-      return { label, kind: 'bar', percent: s.percent_used, bar: bar(s.percent_used / 100), text: s.percent_used + '%', sub: s.reset_at ? 'reset ' + hhmm(s.reset_at) : '', status: s.status };
+      return { label, kind: 'bar', percent: s.percent_used, bar: bar(s.percent_used / 100), text: s.percent_used + '%', sub: (running ? 'RUNNING · ' : '') + (s.reset_at ? 'reset ' + hhmm(s.reset_at) : ''), status: s.status };
     }
     if (s.status === 'WAITING_LIMIT') {
       return { label, kind: 'state', text: 'WAITING_LIMIT', sub: s.next_retry_at ? 'next retry ' + hhmm(s.next_retry_at) : '', status: s.status };
     }
-    if (s.status === 'AVAILABLE') return { label, kind: 'state', text: 'AVAILABLE', sub: s.detected_at ? 'seen ' + ago(s.detected_at) + ' ago' : '', status: s.status };
+    if (s.status === 'AVAILABLE') return running
+      ? { label, kind: 'state', text: 'RUNNING', sub: 'usage UNKNOWN' + (s.detected_at ? ' · seen ' + ago(s.detected_at) + ' ago' : ''), status: s.status }
+      : { label, kind: 'state', text: 'AVAILABLE', sub: s.detected_at ? 'seen ' + ago(s.detected_at) + ' ago' : '', status: s.status };
     return { label, kind: 'state', text: 'UNKNOWN', sub: s.last_known ? 'last ' + s.last_known + (s.detected_at ? ' ' + ago(s.detected_at) + ' ago' : '') : '', reason: s.reason || '', status: 'UNKNOWN' };
   }
 
@@ -240,7 +243,7 @@
     groups.race.appendChild(race.leader); groups.race.appendChild(race.detail); groups.race.appendChild(race.bar);
     groups.race.title = 'Fake money only · PAPER_DEMO_ONLY · LIVE_DISABLED';
     const usageNodes = {};
-    for (const [k, label] of [['chatgpt', 'CHATGPT'], ['codex', 'CODEX'], ['claude', 'CLAUDE']]) {
+    for (const [k, label] of [['codex', 'CODEX'], ['claude', 'CLAUDE']]) {
       const u = el('div', 'usage');
       const name = el('span', 'usage-name', label); const val = el('span', 'usage-val', '…'); const sub = el('span', 'usage-sub', '');
       u.appendChild(name); u.appendChild(val); u.appendChild(sub);
