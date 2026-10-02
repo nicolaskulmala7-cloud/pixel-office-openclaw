@@ -82,7 +82,7 @@ test('overview with Business OS; workers observed only; propagation honest; STAR
   assert.equal(aa.propagation, 'EXTERNAL_PROPAGATION_PENDING', 'invalid ack is never treated as stopped');
   assert.ok(o.workers.every((w) => w.controlledFromVps === false));
   assert.equal(st.details.lastBatch.count, 1000000, 'bounded');
-  assert.ok(Object.keys(st.details.codex).every((k) => ['lastAttemptAt', 'nextRetryAt', 'state'].includes(k)), 'only allowlisted Codex fields');
+  assert.ok(Object.keys(st.details.codex).every((k) => ['lastAttemptAt', 'nextRetryAt', 'state', 'usage'].includes(k)), 'only allowlisted Codex fields');
   assert.equal(o.usage.codex.status, 'WAITING_LIMIT');
   assert.equal(o.usage.codex.percent_used, null, 'Codex exposes no percentage; none invented');
   assert.equal('chatgpt' in o.usage, false);
@@ -94,6 +94,57 @@ test('overview with Business OS; workers observed only; propagation honest; STAR
   const act = (await (await fetch(srv.base + '/api/activity?n=500')).json()).items.map((i) => i.text).join('\n');
   assert.match(act, /STARTAG: NEW -> RUNNING/);
   assert.match(act, /acknowledged global stop \(epoch 4\)/);
+});
+
+test('fresh Codex app-server quota from STARTAG renders live 5h/7d usage', async (t) => {
+  const now = Date.now();
+  const staleBos = {
+    status: 'STALE', percent_used: 62, detected_at: '2026-09-30T18:26:28Z',
+    windows: [{ name: '5h', used_pct: 62 }, { name: '7d', used_pct: 25 }]
+  };
+  const srv = await startServer({ ...NOKS, BUSINESS_OS_UI_STATUS_CLI: fakeUiStatus(BOS({ usage: { claude: { status: 'UNKNOWN' }, codex: staleBos } })) });
+  t.after(() => srv.stop());
+  await post(srv.base, '/api/workers/startag_50k/status', {
+    name: 'STARTAG', status: 'RUNNING',
+    details: {
+      codex: {
+        state: 'RUNNING',
+        usage: {
+          sampledAt: now,
+          source: 'codex_app_server_rate_limits',
+          allowed: true,
+          windows: [
+            { name: '5h', usedPct: 27, resetsAt: now + 3600000 },
+            { name: '7d', usedPct: 41, resetsAt: now + 86400000 }
+          ],
+          token: 'must-not-pass'
+        }
+      }
+    }
+  });
+  const o = await (await fetch(srv.base + '/api/overview')).json();
+  assert.equal(o.usage.codex.status, 'AVAILABLE');
+  assert.equal(o.usage.codex.run_state, 'RUNNING');
+  assert.equal(o.usage.codex.percent_used, 41);
+  assert.deepEqual(o.usage.codex.windows.map((w) => [w.name, w.used_pct]), [['5h', 27], ['7d', 41]]);
+  assert.equal(o.usage.codex.source, 'codex_app_server_rate_limits');
+  assert.doesNotMatch(JSON.stringify(o), /must-not-pass|2026-09-30T18:26:28Z/);
+});
+
+test('stale worker quota degrades to RUNNING usage UNKNOWN instead of replaying percentages', async (t) => {
+  const old = Date.now() - 60 * 60 * 1000;
+  const srv = await startServer({ ...NOKS, BUSINESS_OS_UI_STATUS_CLI: fakeUiStatus(BOS({ usage: { claude: { status: 'UNKNOWN' }, codex: { status: 'UNKNOWN' } } })) });
+  t.after(() => srv.stop());
+  await post(srv.base, '/api/workers/startag_50k/status', {
+    name: 'STARTAG', status: 'RUNNING',
+    details: { codex: { state: 'RUNNING', usage: { sampledAt: old, source: 'codex_app_server_rate_limits', windows: [{ name: '5h', usedPct: 88, resetsAt: old + 3600000 }] } } }
+  });
+  const o = await (await fetch(srv.base + '/api/overview')).json();
+  assert.equal(o.usage.codex.status, 'AVAILABLE');
+  assert.equal(o.usage.codex.run_state, 'RUNNING');
+  assert.equal(o.usage.codex.percent_used, null);
+  assert.doesNotMatch(JSON.stringify(o.usage.codex), /88/);
+  assert.match(o.usage.codex.reason, /stale/i);
 });
 
 test('stale Codex quota snapshot never overrides a live STARTAG RUNNING heartbeat', async (t) => {
