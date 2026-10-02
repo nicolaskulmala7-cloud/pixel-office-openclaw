@@ -49,7 +49,7 @@ function sanitise(raw) {
     leaderboards: { paper: board(raw.leaderboards && raw.leaderboards.paper), real: board(raw.leaderboards && raw.leaderboards.real) },
     paper_race: { id: clip(pr.id, 60), title: clip(pr.title, 80), status: clip(pr.status, 30) || 'UNKNOWN', mode: clip(pr.mode, 30), live_mode: clip(pr.live_mode, 30), currency: clip(pr.currency, 20), starting_balance: num(pr.starting_balance), target_balance: num(pr.target_balance), pause_at: clip(pr.pause_at, 40) || null, as_of: clip(pr.as_of, 40) || null, paused: pr.paused === true, leader: pr.leader ? raceRow(pr.leader) : null, winner: pr.winner ? raceRow(pr.winner) : null, rows: (Array.isArray(pr.rows) ? pr.rows : []).slice(0, 20).map(raceRow) },
     agents: (raw.agents || []).slice(0, 64).map((a) => ({ id: clip(a.id, 40), display: clip(a.display, 60), room: clip(a.room, 60), parent: a.parent ? clip(a.parent, 40) : null, status: clip(a.status, 20), model: clip(a.model, 40), tier: clip(a.tier, 20) })),
-    usage: { claude: usage(raw.usage && raw.usage.claude), codex: usage(raw.usage && raw.usage.codex), chatgpt: usage(raw.usage && raw.usage.chatgpt) },
+    usage: { claude: usage(raw.usage && raw.usage.claude), codex: usage(raw.usage && raw.usage.codex) },
   };
 }
 
