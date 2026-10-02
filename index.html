@@ -10,18 +10,20 @@
             padding: 20px;
             background: #2d2d2d;
             display: flex;
-            flex-wrap: wrap; /* mapa ancho (1152px): el panel baja si la ventana es estrecha */
-            justify-content: center;
-            align-items: flex-start;
+            flex-direction: column;
+            align-items: center;
             gap: 20px;
             min-height: 100vh;
+            box-sizing: border-box;
             font-family: 'Courier New', monospace;
         }
         
         #gameContainer {
             position: relative;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            flex-shrink: 0;
+            width: 100%;
+            min-width: 0;
+            overflow-x: auto;
         }
         
         canvas {
@@ -60,7 +62,7 @@
         #hud .usage { display: flex; flex-direction: column; line-height: 1.15; min-width: 142px; }
         #hud .usage-name { color: #9ca3af; font-size: 9px; } #hud .usage-val { font-size: 10px; white-space: pre-line; } #hud .usage-sub { color: #6b7280; font-size: 9px; }
         #hud .usage-UNKNOWN .usage-val, #hud .usage-STALE .usage-val { color: #94a3b8; } #hud .usage-WAITING_LIMIT .usage-val, #hud .usage-LOW .usage-val { color: #fbbf24; } #hud .usage-CRITICAL .usage-val, #hud .usage-ERROR .usage-val { color: #f87171; } #hud .usage-AVAILABLE .usage-val { color: #86efac; }
-        #mapStage { position: relative; }
+        #mapStage { position: relative; width: max-content; margin-inline: auto; }
         .cc-plaque { position: absolute; width: 32px; height: 32px; z-index: 6; color: #1b1f29; font: bold 14px "Courier New", monospace; display: flex; align-items: center; justify-content: center; }
         .cc-plaque.unlocked { background: radial-gradient(#fde68a, #c9a227); border: 1px solid #fff7d6; border-radius: 3px; box-shadow: 0 0 8px #e0b83a; }
         .cc-feed { position: static; margin-top: 6px; width: auto; z-index: 7; background: rgba(17, 24, 39, 0.92); border: 1px solid #374151; border-radius: 6px; font: 10px "Courier New", monospace; color: #d1d5db; }
