@@ -1,0 +1,36 @@
+name: Pixel Office CI
+
+on:
+  push:
+    branches:
+      - business-os-integration
+  pull_request:
+    branches:
+      - business-os-integration
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pixel-office-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
