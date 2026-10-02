@@ -161,3 +161,23 @@ test('SYSTEM CREATED plaque: first plaque, shows the display date only when unlo
   const s = sanitise({ achievements: ach });
   assert.deepEqual([s.achievements[0].display_date, s.achievements[0].category], ['28.09.2026', 'historical']);
 });
+
+
+test('STARTAG RUNNING with unknown count never renders as zero or stale 500 progress', () => {
+  const w = {
+    id: 'startag_50k',
+    name: 'STARTAG 50K',
+    status: 'RUNNING',
+    stale: false,
+    phase: 'Codex running (read-only process observation)',
+    progress: { current: null, target: 50000, unit: 'leads' },
+    details: { codex: { state: 'RUNNING' }, checkpoint: { id: 'STEP5I_CHECKPOINT500.json', at: 1 } },
+    lastSeenAt: Date.now(),
+  };
+  const card = CC.externalRoomModel('startag_50k', w, Date.now());
+  assert.equal(card.board, 'NO PROGRESS REPORTED');
+  assert.doesNotMatch(JSON.stringify(card), /500\s*\/\s*50,?000|0\s*\/\s*50,?000/);
+  const wm = CC.workerModel(w, Date.now());
+  assert.doesNotMatch(wm.lines.join('\n'), /500\s*\/\s*50,?000|0\s*\/\s*50,?000/);
+  assert.match(wm.lines.join('\n'), /Codex: RUNNING/);
+});
