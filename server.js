@@ -701,9 +701,9 @@ const UNKNOWN_USAGE = (reason, extra = {}) => ({ status: 'UNKNOWN', percent_used
 const codexUsage = (w) => {
   if (!w || !w.details || !w.details.codex) return UNKNOWN_USAGE('STARTAG has not reported a structured Codex state');
   const c = w.details.codex;
-  if (w.stale) return UNKNOWN_USAGE('STARTAG heartbeat stale', { last_known: c.state, detected_at: w.lastSeenAt || null });
+  if (w.stale) return UNKNOWN_USAGE('STARTAG heartbeat stale', { last_known: c.state, run_state: c.state, detected_at: w.lastSeenAt || null });
   const status = c.state === 'WAITING_LIMIT' ? 'WAITING_LIMIT' : (c.state === 'AVAILABLE' || c.state === 'RUNNING') ? 'AVAILABLE' : 'UNKNOWN';
-  return { status, percent_used: null, reset_at: null, next_retry_at: c.nextRetryAt || null, detected_at: w.lastSeenAt || null, reason: 'reported by the STARTAG worker (Codex exposes no percentage)' };
+  return { status, percent_used: null, reset_at: null, run_state: c.state, next_retry_at: c.nextRetryAt || null, detected_at: w.lastSeenAt || null, reason: 'reported by the STARTAG worker (Codex exposes no percentage)' };
 };
 let overviewBaseline = null;
 const noteOverviewChanges = (bos) => {
@@ -735,16 +735,19 @@ app.get('/api/overview', async (req, res) => {
         : (w.globalStop && epoch !== null && w.globalStop.epoch === epoch ? 'ACKED' : 'EXTERNAL_PROPAGATION_PENDING')
     }));
     const startag = workers.find(w => w.id === 'startag_50k');
-    const proofreader = startag && !startag.stale && startag.details && startag.details.proofreader ? startag.details.proofreader.state : null;
-    const observedCodex = bos.available && bos.usage.codex && bos.usage.codex.status !== 'UNKNOWN' ? bos.usage.codex : codexUsage(startag);
+    const workerCodex = codexUsage(startag);
+    const bosCodex = bos.available && bos.usage && bos.usage.codex
+      && ['AVAILABLE', 'LOW', 'CRITICAL', 'LIMITED', 'WAITING_LIMIT'].includes(bos.usage.codex.status)
+      ? bos.usage.codex
+      : null;
+    const observedCodex = bosCodex ? { ...bosCodex, run_state: workerCodex.run_state || null } : workerCodex;
     res.json({
       generatedAt: now,
       bos,
       workers,
       usage: {
         claude: bos.available ? bos.usage.claude : UNKNOWN_USAGE('Business OS status unavailable'),
-        codex: observedCodex,
-        chatgpt: UNKNOWN_USAGE('interactive ChatGPT Chat exposes no usage to the VPS', { proofreader })
+        codex: observedCodex
       },
       activity: activity.list(30)
     });
