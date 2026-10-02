@@ -39,7 +39,7 @@ test('bridge sanitiser: drops unknown fields, clamps usage, never invents a perc
   const s = sanitise(BOS({ usage: { claude: { status: 'AVAILABLE', percent_used: 250 }, codex: { status: 'MADE_UP', percent_used: 40 } } }));
   assert.equal(s.usage.claude.percent_used, 100);
   assert.deepEqual([s.usage.codex.status, s.usage.codex.percent_used], ['UNKNOWN', null]);
-  assert.deepEqual([s.usage.chatgpt.status, s.usage.chatgpt.percent_used], ['UNKNOWN', null]);
+  assert.equal('chatgpt' in s.usage, false, 'nonexistent ChatGPT usage meter is omitted');
   assert.doesNotMatch(JSON.stringify(s), /sk-should-not-pass|\.env/);
   assert.equal(sanitise({ global: { system: 'PWNED' } }).global.system, 'UNKNOWN');
   assert.deepEqual([s.paper_race.starting_balance, s.paper_race.target_balance, s.paper_race.live_mode], [100, 300, 'LIVE_DISABLED']);
@@ -53,10 +53,11 @@ test('overview without Business OS: everything UNKNOWN, nothing fabricated', asy
   t.after(() => srv.stop());
   const o = await (await fetch(srv.base + '/api/overview')).json();
   assert.equal(o.bos.available, false);
-  for (const k of ['claude', 'codex', 'chatgpt']) {
+  for (const k of ['claude', 'codex']) {
     assert.equal(o.usage[k].status, 'UNKNOWN', k);
     assert.equal(o.usage[k].percent_used, null, k);
   }
+  assert.equal('chatgpt' in o.usage, false);
   const hud = CC.hudModel({ overview: o });
   assert.deepEqual(hud.global, { system: 'UNKNOWN', mode: 'UNKNOWN', kill: 'UNKNOWN' });
   assert.equal(CC.levelModel(null).text, 'LVL ?');
@@ -84,8 +85,8 @@ test('overview with Business OS; workers observed only; propagation honest; STAR
   assert.ok(Object.keys(st.details.codex).every((k) => ['lastAttemptAt', 'nextRetryAt', 'state'].includes(k)), 'only allowlisted Codex fields');
   assert.equal(o.usage.codex.status, 'WAITING_LIMIT');
   assert.equal(o.usage.codex.percent_used, null, 'Codex exposes no percentage; none invented');
-  assert.equal(o.usage.chatgpt.status, 'UNKNOWN');
-  assert.equal(o.usage.chatgpt.proofreader, 'PROMPT_READY');
+  assert.equal('chatgpt' in o.usage, false);
+  assert.equal(st.details.proofreader.state, 'PROMPT_READY');
   const lines = CC.workerModel(st).lines.join('\n');
   assert.match(lines, /Codex: WAITING_LIMIT · next retry/);
   assert.match(lines, /Proofreader: PROMPT_READY/);
@@ -95,6 +96,27 @@ test('overview with Business OS; workers observed only; propagation honest; STAR
   assert.match(act, /acknowledged global stop \(epoch 4\)/);
 });
 
+test('stale Codex quota snapshot never overrides a live STARTAG RUNNING heartbeat', async (t) => {
+  const staleCodex = {
+    status: 'STALE', percent_used: 93, detected_at: '2026-10-01T00:00:00Z',
+    windows: [{ name: '5h', used_pct: 43 }, { name: '7d', used_pct: 93 }]
+  };
+  const srv = await startServer({ ...NOKS, BUSINESS_OS_UI_STATUS_CLI: fakeUiStatus(BOS({ usage: { claude: { status: 'UNKNOWN' }, codex: staleCodex } })) });
+  t.after(() => srv.stop());
+  await post(srv.base, '/api/workers/startag_50k/status', {
+    name: 'STARTAG', status: 'RUNNING',
+    progress: { current: null, target: 50000, unit: 'leads' },
+    details: { codex: { state: 'RUNNING' } }
+  });
+  const o = await (await fetch(srv.base + '/api/overview')).json();
+  assert.equal(o.usage.codex.status, 'AVAILABLE');
+  assert.equal(o.usage.codex.run_state, 'RUNNING');
+  assert.equal(o.usage.codex.percent_used, null);
+  assert.equal(Array.isArray(o.usage.codex.windows) ? o.usage.codex.windows.length : 0, 0);
+  assert.doesNotMatch(JSON.stringify(o.usage.codex), /43|93|2026-10-01T00:00:00Z/);
+  assert.equal('chatgpt' in o.usage, false);
+});
+
 test('view models: FAILED highlighted, usage bar only from real numbers, plaques only when unlocked', () => {
   const hud = CC.hudModel({ tasks: [{ status: 'failed' }, { status: 'queued' }, { status: 'waiting_approval' }], chars: [] });
   assert.deepEqual([hud.work.failed, hud.work.failedAlert, hud.work.queued, hud.work.approvals], [1, true, 1, 1]);
@@ -102,6 +124,8 @@ test('view models: FAILED highlighted, usage bar only from real numbers, plaques
   assert.equal(CC.usageModel('Claude', { status: 'AVAILABLE', percent_used: 42 }).kind, 'bar');
   assert.equal(CC.usageModel('Claude', { status: 'AVAILABLE', percent_used: null }).kind, 'state');
   assert.equal(CC.usageModel('Codex', undefined).text, 'UNKNOWN');
+  const runningCodex = CC.usageModel('Codex', { status: 'AVAILABLE', run_state: 'RUNNING', detected_at: Date.now() });
+  assert.deepEqual([runningCodex.text, runningCodex.sub.includes('usage UNKNOWN')], ['RUNNING', true]);
   const windows = CC.usageModel('Codex', { status: 'LOW', detected_at: Date.now(), windows: [{ name: '5h', used_pct: 43 }, { name: '7d', used_pct: 93 }] });
   assert.equal(windows.kind, 'windows');
   assert.match(windows.text, /5H .*43%\n7D .*93%/);
@@ -136,6 +160,7 @@ test('command-center DOM uses textContent only; UI has no fabricated usage defau
   const src = fs.readFileSync(path.join(REPO, 'command-center.js'), 'utf8');
   assert.doesNotMatch(src, /innerHTML|insertAdjacentHTML|document\.write|eval\(/);
   assert.doesNotMatch(src, /percent_used\s*[:=]\s*\d/, 'no hard-coded usage numbers');
+  assert.doesNotMatch(src, /\['chatgpt',\s*'CHATGPT'\]/, 'nonexistent ChatGPT meter is not rendered');
   const html = fs.readFileSync(path.join(REPO, 'index.html'), 'utf8');
   assert.match(html, /<script src="command-center\.js"><\/script>/);
 });
