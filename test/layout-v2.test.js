@@ -96,11 +96,11 @@ test('idle seats are distinct Hangout seats, enough for every enabled agent', ()
   for (const t of L.targets.idle) { assert.ok(inRoom('Hangout Room', t)); assert.equal(cell(t), 3); }
 });
 
-test('UI anchors: lever on free Oval Office floor; one plaque per achievement in the Achievement Hall', () => {
+test('UI anchors: lever on free Oval Office floor; generated plaque anchors match the Achievement Hall spec', () => {
   assert.ok(inRoom('Command Center', L.ui.lever));
   assert.equal(cell(L.ui.lever), 0);
-  const ach = require(process.env.BOS_ACHIEVEMENTS || '/home/mestari/business-os-claude/ledger/achievements.json');
-  assert.equal(L.ui.plaques.length, ach.achievements.length);
+  const plaqueSlots = SPEC.rooms.achievement_hall.template.join('').split('').filter((ch) => ch === SPEC.ui.plaques.char).length;
+  assert.equal(L.ui.plaques.length, plaqueSlots, 'layout exposes one anchor per plaque slot in the local spec');
   for (const p of L.ui.plaques) assert.ok(inRoom('Achievement Hall', p));
 });
 
