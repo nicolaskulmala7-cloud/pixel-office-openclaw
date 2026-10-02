@@ -481,10 +481,27 @@ const boundedInt = (v, min, max) => {
 // Structured worker details (all optional). Never credentials: only states, counts, times.
 const CODEX_STATES = ['AVAILABLE', 'RUNNING', 'WAITING_LIMIT', 'UNKNOWN'];
 const PROOFREADER_STATES = ['IDLE', 'PROOFREADING', 'PROMPT_READY', 'WAITING_HUMAN', 'UNKNOWN'];
+const CODEX_USAGE_STALE_MS = 15 * 60 * 1000;
+const sanitiseCodexUsage = (u) => {
+  if (!u || typeof u !== 'object') return null;
+  const windows = (Array.isArray(u.windows) ? u.windows : []).slice(0, 4).map((w) => ({
+    name: clip(w && w.name, 20),
+    usedPct: Number.isFinite(w && w.usedPct) ? Math.max(0, Math.min(100, Math.round(w.usedPct))) : null,
+    resetsAt: num(w && w.resetsAt)
+  })).filter((w) => w.name && Number.isFinite(w.usedPct));
+  const sampledAt = num(u.sampledAt);
+  if (!sampledAt || !windows.length) return null;
+  return {
+    sampledAt,
+    source: clip(u.source, 50) || 'codex_app_server_rate_limits',
+    allowed: typeof u.allowed === 'boolean' ? u.allowed : null,
+    windows
+  };
+};
 const sanitiseWorkerDetails = (d) => {
   if (!d || typeof d !== 'object') return null;
   const out = {};
-  if (d.codex && typeof d.codex === 'object') out.codex = { state: CODEX_STATES.includes(d.codex.state) ? d.codex.state : 'UNKNOWN', lastAttemptAt: num(d.codex.lastAttemptAt), nextRetryAt: num(d.codex.nextRetryAt) };
+  if (d.codex && typeof d.codex === 'object') out.codex = { state: CODEX_STATES.includes(d.codex.state) ? d.codex.state : 'UNKNOWN', lastAttemptAt: num(d.codex.lastAttemptAt), nextRetryAt: num(d.codex.nextRetryAt), usage: sanitiseCodexUsage(d.codex.usage) };
   if (d.proofreader && typeof d.proofreader === 'object') out.proofreader = { state: PROOFREADER_STATES.includes(d.proofreader.state) ? d.proofreader.state : 'UNKNOWN' };
   if (d.checkpoint && typeof d.checkpoint === 'object') out.checkpoint = { id: clip(d.checkpoint.id, 60), at: num(d.checkpoint.at) };
   if (d.lastBatch && typeof d.lastBatch === 'object') out.lastBatch = { id: clip(d.lastBatch.id, 60), at: num(d.lastBatch.at), count: boundedInt(d.lastBatch.count, 0, 1000000) };
@@ -698,12 +715,49 @@ require('./killswitch-bridge').createKillSwitchBridge().register(app);
 // Business OS state (global gate, mode, ledger level, achievements, models, usage) comes
 // from business-bridge.js; external workers are observed only (never controlled here).
 const UNKNOWN_USAGE = (reason, extra = {}) => ({ status: 'UNKNOWN', percent_used: null, reset_at: null, reason, ...extra });
-const codexUsage = (w) => {
+const codexUsage = (w, now = Date.now()) => {
   if (!w || !w.details || !w.details.codex) return UNKNOWN_USAGE('STARTAG has not reported a structured Codex state');
   const c = w.details.codex;
   if (w.stale) return UNKNOWN_USAGE('STARTAG heartbeat stale', { last_known: c.state, run_state: c.state, detected_at: w.lastSeenAt || null });
+
+  const u = c.usage;
+  const usageFresh = !!(u && Number.isFinite(u.sampledAt) && now - u.sampledAt <= CODEX_USAGE_STALE_MS && now - u.sampledAt >= -60_000);
+  const windows = usageFresh
+    ? (u.windows || []).filter((x) => Number.isFinite(x.usedPct)).map((x) => ({
+        name: x.name,
+        used_pct: x.usedPct,
+        resets_at: Number.isFinite(x.resetsAt) ? new Date(x.resetsAt).toISOString() : null
+      }))
+    : [];
+
+  if (windows.length) {
+    const maxPct = Math.max(...windows.map((x) => x.used_pct));
+    const maxWindow = windows.find((x) => x.used_pct === maxPct);
+    const status = c.state === 'WAITING_LIMIT' || u.allowed === false
+      ? 'WAITING_LIMIT'
+      : maxPct >= 95 ? 'CRITICAL' : maxPct >= 80 ? 'LOW' : 'AVAILABLE';
+    return {
+      status,
+      percent_used: maxPct,
+      reset_at: maxWindow ? maxWindow.resets_at : null,
+      windows,
+      run_state: c.state,
+      detected_at: new Date(u.sampledAt).toISOString(),
+      source: u.source || 'codex_app_server_rate_limits',
+      reason: 'Codex account/rateLimits/read via STARTAG worker'
+    };
+  }
+
   const status = c.state === 'WAITING_LIMIT' ? 'WAITING_LIMIT' : (c.state === 'AVAILABLE' || c.state === 'RUNNING') ? 'AVAILABLE' : 'UNKNOWN';
-  return { status, percent_used: null, reset_at: null, run_state: c.state, next_retry_at: c.nextRetryAt || null, detected_at: w.lastSeenAt || null, reason: 'reported by the STARTAG worker (Codex exposes no percentage)' };
+  return {
+    status,
+    percent_used: null,
+    reset_at: null,
+    run_state: c.state,
+    next_retry_at: c.nextRetryAt || null,
+    detected_at: w.lastSeenAt || null,
+    reason: u && !usageFresh ? 'Codex quota sample stale; process state is live' : 'Codex process state live; quota unavailable'
+  };
 };
 let overviewBaseline = null;
 const noteOverviewChanges = (bos) => {
@@ -735,12 +789,14 @@ app.get('/api/overview', async (req, res) => {
         : (w.globalStop && epoch !== null && w.globalStop.epoch === epoch ? 'ACKED' : 'EXTERNAL_PROPAGATION_PENDING')
     }));
     const startag = workers.find(w => w.id === 'startag_50k');
-    const workerCodex = codexUsage(startag);
+    const workerCodex = codexUsage(startag, now);
     const bosCodex = bos.available && bos.usage && bos.usage.codex
       && ['AVAILABLE', 'LOW', 'CRITICAL', 'LIMITED', 'WAITING_LIMIT'].includes(bos.usage.codex.status)
       ? bos.usage.codex
       : null;
-    const observedCodex = bosCodex ? { ...bosCodex, run_state: workerCodex.run_state || null } : workerCodex;
+    const workerHasQuota = Number.isFinite(workerCodex.percent_used) || (Array.isArray(workerCodex.windows) && workerCodex.windows.some((x) => Number.isFinite(x && x.used_pct)));
+    const workerAuthoritative = workerCodex.status === 'WAITING_LIMIT' || workerHasQuota;
+    const observedCodex = workerAuthoritative ? workerCodex : (bosCodex ? { ...bosCodex, run_state: workerCodex.run_state || null } : workerCodex);
     res.json({
       generatedAt: now,
       bos,
