@@ -186,3 +186,31 @@ test('saved rooms from before the kind field still get kind/workerId from the ge
   assert.equal(rooms.find((r) => r.name === 'Research Lab').kind, 'agent');
   assert.equal(rooms.filter((r) => r.kind === 'external-worker').length, 2);
 });
+
+
+test('STARTAG room exposes a real power control mapped to the existing worker control endpoint', () => {
+  assert.equal(CC.workerControlUrl('startag_50k'), '/api/workers/startag_50k/control');
+
+  const off = CC.externalRoomModel('startag_50k', {
+    id: 'startag_50k', status: 'OFFLINE', stale: true, lastSeenAt: 1,
+    control: { enabled: true, pendingAction: null }
+  });
+  assert.deepEqual([off.power.label, off.power.action, off.power.active], ['OFF', 'run', false]);
+
+  const running = CC.externalRoomModel('startag_50k', {
+    id: 'startag_50k', status: 'RUNNING', stale: false, lastSeenAt: Date.now(),
+    control: { enabled: true, pendingAction: null }
+  });
+  assert.deepEqual([running.power.label, running.power.action, running.power.active], ['ON', 'pause', true]);
+
+  const starting = CC.externalRoomModel('startag_50k', {
+    id: 'startag_50k', status: 'OFFLINE', stale: true, lastSeenAt: 1,
+    control: { enabled: true, pendingAction: { action: 'run' } }
+  });
+  assert.equal(starting.power.label, 'STARTING…');
+
+  const src = fs.readFileSync(path.join(REPO, 'command-center.js'), 'utf8');
+  assert.match(src, /setWorkerPower\(e\.worker, action\)/);
+  assert.match(src, /\{ enabled: true, action: 'run' \}/);
+  assert.match(src, /\{ enabled: false, action: 'pause' \}/);
+});
