@@ -196,8 +196,8 @@
       m.power = {
         active,
         pending,
-        label: pending === 'pause' ? 'STOPPING…' : (pending === 'run' || pending === 'resume') ? 'STARTING…' : active ? 'ON' : 'OFF',
-        action: active ? 'pause' : 'run'
+        label: (pending === 'run' || pending === 'resume') ? 'STARTING…' : active ? 'ON' : 'OFF',
+        action: active ? null : 'run'
       };
       m.board = stale ? 'STALE / OFFLINE' : (cur === null ? 'NO PROGRESS REPORTED' : cur.toLocaleString('en-US') + ' / ' + STARTAG_TARGET.toLocaleString('en-US'));
       m.fraction = !stale && cur !== null ? Math.max(0, Math.min(1, cur / STARTAG_TARGET)) : null;
@@ -330,9 +330,7 @@
       const res = await fetchImpl(workerControlUrl(id), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(action === 'pause'
-          ? { enabled: false, action: 'pause' }
-          : { enabled: true, action: 'run' })
+        body: JSON.stringify({ enabled: true, action: 'run' })
       });
       if (!res.ok) throw new Error('worker control HTTP ' + res.status);
       await refresh();
@@ -355,8 +353,9 @@
           r.nodes.power.className = 'cc-ext-power' + (m.power.active ? ' on' : '') + (m.power.pending ? ' pending' : '');
           r.nodes.power.setAttribute('aria-pressed', String(m.power.active));
           r.nodes.power.setAttribute('aria-label', 'STARTAG 50K power ' + m.power.label);
-          r.nodes.power.disabled = !!m.power.pending;
-          r.nodes.power.dataset.action = m.power.action;
+          r.nodes.power.disabled = !!m.power.pending || !m.power.action;
+          if (m.power.action) r.nodes.power.dataset.action = m.power.action;
+          else delete r.nodes.power.dataset.action;
         }
         if (r.nodes.board) {
           r.nodes.boardText.textContent = m.board;
@@ -418,7 +417,8 @@
           nodes.power.addEventListener('click', async (ev) => {
             if (ev && ev.stopPropagation) ev.stopPropagation();
             if (nodes.power.disabled) return;
-            const action = nodes.power.dataset.action || 'run';
+            const action = nodes.power.dataset.action;
+            if (!action) return;
             nodes.power.disabled = true;
             try { await setWorkerPower(e.worker, action); }
             catch (err) { nodes.power.disabled = false; nodes.power.title = String(err && err.message || err); }
