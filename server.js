@@ -545,13 +545,18 @@ const effectiveWorker = (worker, now = Date.now()) => {
   if (!worker) return null;
 
   const enabled = !(worker.control && worker.control.enabled === false);
-  const stale = !worker.lastSeenAt || now - worker.lastSeenAt > WORKER_STALE_MS;
+  const terminalCompleted = worker.status === 'COMPLETED'
+    && worker.progress
+    && worker.progress.current === worker.progress.target
+    && worker.progress.target === 50000;
+  const stale = terminalCompleted ? false : (!worker.lastSeenAt || now - worker.lastSeenAt > WORKER_STALE_MS);
 
   return {
     ...worker,
-    status: !enabled ? 'OFF' : (stale ? 'OFFLINE' : worker.status),
-    stale: enabled ? stale : false,
-    enabled
+    status: terminalCompleted ? 'COMPLETED' : (!enabled ? 'OFF' : (stale ? 'OFFLINE' : worker.status)),
+    stale: terminalCompleted ? false : (enabled ? stale : false),
+    enabled: terminalCompleted ? false : enabled,
+    terminal: terminalCompleted
   };
 };
 
