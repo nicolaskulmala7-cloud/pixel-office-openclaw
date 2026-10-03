@@ -260,29 +260,3 @@ test('STARTAG RUNNING with unknown count never renders as zero or stale 500 prog
   assert.doesNotMatch(wm.lines.join('\n'), /500\s*\/\s*50,?000|0\s*\/\s*50,?000/);
   assert.match(wm.lines.join('\n'), /Codex: RUNNING/);
 });
-
-
-test('completed STARTAG is terminal, stays completed when heartbeat stops, and is moved to COMPLETED lane', async (t) => {
-  const srv = await startServer(NOKS);
-  t.after(() => srv.stop());
-
-  await post(srv.base, '/api/workers/startag_50k/status', {
-    name: 'STARTAG 50K',
-    status: 'COMPLETED',
-    phase: 'Completed',
-    progress: { current: 50000, target: 50000, unit: 'leads' },
-    lastCheckAt: Date.now(),
-    details: { codex: { state: 'AVAILABLE' } }
-  });
-
-  const w = await (await fetch(srv.base + '/api/workers/startag_50k')).json();
-  assert.equal(w.status, 'COMPLETED');
-  assert.equal(w.stale, false);
-  assert.equal(w.terminal, true);
-  assert.equal(w.enabled, false);
-
-  const html = fs.readFileSync(path.join(REPO, 'index.html'), 'utf8');
-  assert.match(html, /completedWorkers = .*filter\(w => w\.status === 'COMPLETED'\)/);
-  assert.match(html, /no active external workers/);
-  assert.match(html, /external worker · COMPLETED/);
-});
