@@ -2047,28 +2047,13 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
             const el = document.getElementById('workerCards');
             if (!el) return;
 
-            // Terminal STARTAG/worker completions move to the COMPLETED lane below.
-            const workers = (workerFeedCache.workers || []).filter(w => w.status !== 'COMPLETED');
+            const workers = workerFeedCache.workers || [];
             el.innerHTML = workers.length
                 ? workers.map(workerCardHtml).join('')
-                : '<div class="text-[11px] text-gray-600 mb-2">no active external workers</div>';
+                : '<div class="text-[11px] text-gray-600 mb-2">no external workers</div>';
 
             const count = document.getElementById('workersCount');
             if (count) count.textContent = workers.length;
-        }
-
-        function completedWorkerCardHtml(w, color) {
-            const p = w.progress || {};
-            const progress = Number.isFinite(p.current) && Number.isFinite(p.target)
-                ? Number(p.current).toLocaleString() + ' / ' + Number(p.target).toLocaleString() + (p.unit ? ' ' + esc(p.unit) : '')
-                : 'completed';
-            return '<div class="task-card" style="border-left-color:' + color + '">' +
-                '<div class="t-title">' + esc(w.name || w.id || 'worker') + '</div>' +
-                '<div class="t-meta">external worker · COMPLETED · ' + esc(progress) +
-                    (w.lastCheckAt ? ' · done ' + fmtTime(w.lastCheckAt) : '') + '</div>' +
-                (w.message ? '<div style="font-size:11px;color:#d1d5db;margin-top:5px">' + esc(w.message) + '</div>' : '') +
-                '<div class="t-meta">id ' + esc(w.id || '') + '</div>' +
-            '</div>';
         }
 
         const agentName = (id) => { const c = (window.characters || []).find(x => x.id === id); return c ? c.name : (id || 'unknown'); };
@@ -2089,17 +2074,11 @@ No escribas NADA MÁS que el JSON crudo, sin markdown de bloques de código.`;
             const el = document.getElementById('taskSections');
             if (!el) return;
             const tasks = taskFeedCache.tasks || [];
-            const completedWorkers = (workerFeedCache.workers || []).filter(w => w.status === 'COMPLETED');
             el.innerHTML = TASK_GROUPS.map(g => {
                 const list = tasks.filter(g.match);
                 const shown = g.key === 'completed' || g.key === 'failed' ? list.slice(0, 15) : list;
-                const workerDone = g.key === 'completed'
-                    ? completedWorkers.map(w => completedWorkerCardHtml(w, g.color)).join('')
-                    : '';
-                const count = list.length + (g.key === 'completed' ? completedWorkers.length : 0);
-                const cards = shown.map(t => taskCardHtml(t, g.color)).join('') + workerDone;
-                return '<div class="task-section"><h4><span style="color:' + g.color + '">● ' + g.label + '</span><span>' + count + '</span></h4>' +
-                    (cards || '<div class="text-[11px] text-gray-600 mb-2">none</div>') + '</div>';
+                return '<div class="task-section"><h4><span style="color:' + g.color + '">● ' + g.label + '</span><span>' + list.length + '</span></h4>' +
+                    (shown.length ? shown.map(t => taskCardHtml(t, g.color)).join('') : '<div class="text-[11px] text-gray-600 mb-2">none</div>') + '</div>';
             }).join('');
             const upd = document.getElementById('tasksUpdated');
             if (upd) upd.textContent = taskFeedCache.updatedAt ? 'ledger synced ' + fmtTime(taskFeedCache.updatedAt) : 'waiting for sync bridge';
