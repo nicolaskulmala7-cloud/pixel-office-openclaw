@@ -201,7 +201,7 @@ test('STARTAG room exposes a real power control mapped to the existing worker co
     id: 'startag_50k', status: 'RUNNING', stale: false, lastSeenAt: Date.now(),
     control: { enabled: true, pendingAction: null }
   });
-  assert.deepEqual([running.power.label, running.power.action, running.power.active], ['ON', 'pause', true]);
+  assert.deepEqual([running.power.label, running.power.action, running.power.active], ['ON', null, true]);
 
   const starting = CC.externalRoomModel('startag_50k', {
     id: 'startag_50k', status: 'OFFLINE', stale: true, lastSeenAt: 1,
@@ -212,5 +212,5 @@ test('STARTAG room exposes a real power control mapped to the existing worker co
   const src = fs.readFileSync(path.join(REPO, 'command-center.js'), 'utf8');
   assert.match(src, /setWorkerPower\(e\.worker, action\)/);
   assert.match(src, /\{ enabled: true, action: 'run' \}/);
-  assert.match(src, /\{ enabled: false, action: 'pause' \}/);
+  assert.doesNotMatch(src, /setWorkerPower\(e\.worker, 'pause'\)|\{ enabled: false, action: 'pause' \}/);
 });
