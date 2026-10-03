@@ -14,6 +14,7 @@
 
   const OVERVIEW_URL = '/api/overview';
   const POLL_MS = 10000;
+  const workerControlUrl = (id) => '/api/workers/' + encodeURIComponent(id) + '/control';
   const eur = (n) => (Number.isFinite(n) ? '€' + Math.round(n).toLocaleString('en-US') : '€?');
   const hhmm = (t) => {
     const d = typeof t === 'number' ? new Date(t) : new Date(Date.parse(t));
@@ -190,6 +191,14 @@
     if (id === 'startag_50k') {
       const p = w.progress || {};
       const cur = Number.isFinite(p.current) ? p.current : null;
+      const pending = w.control && w.control.pendingAction ? w.control.pendingAction.action : null;
+      const active = !stale && ['RUNNING', 'PROOFREADING', 'PROMPT_READY', 'WAITING_LIMIT', 'WAITING_APPROVAL'].includes(status);
+      m.power = {
+        active,
+        pending,
+        label: pending === 'pause' ? 'STOPPING…' : (pending === 'run' || pending === 'resume') ? 'STARTING…' : active ? 'ON' : 'OFF',
+        action: active ? 'pause' : 'run'
+      };
       m.board = stale ? 'STALE / OFFLINE' : (cur === null ? 'NO PROGRESS REPORTED' : cur.toLocaleString('en-US') + ' / ' + STARTAG_TARGET.toLocaleString('en-US'));
       m.fraction = !stale && cur !== null ? Math.max(0, Math.min(1, cur / STARTAG_TARGET)) : null;
       m.codex = stale ? '—' : (d.codex ? d.codex.state : 'not reported');
@@ -317,6 +326,17 @@
     let cardFor = null;
     cardClose.addEventListener('click', () => { cardFor = null; card.className = 'cc-ext-card hidden'; });
     const workerById = (id) => ((overview && overview.workers) || []).find((x) => x.id === id) || null;
+    async function setWorkerPower(id, action) {
+      const res = await fetchImpl(workerControlUrl(id), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(action === 'pause'
+          ? { enabled: false, action: 'pause' }
+          : { enabled: true, action: 'run' })
+      });
+      if (!res.ok) throw new Error('worker control HTTP ' + res.status);
+      await refresh();
+    }
     function renderCard() {
       if (!cardFor) return;
       const m = externalRoomModel(cardFor.id, workerById(cardFor.id));
@@ -330,6 +350,14 @@
         r.nodes.room.className = 'cc-ext-room tone-' + m.tone;
         r.nodes.status.textContent = m.id === 'aalto_seat_watcher' ? (m.label || m.status) : m.status;
         if (r.nodes.lamp) r.nodes.lamp.className = 'cc-ext-lamp tone-' + m.tone;
+        if (r.nodes.power && m.power) {
+          r.nodes.power.textContent = '⏻ ' + m.power.label;
+          r.nodes.power.className = 'cc-ext-power' + (m.power.active ? ' on' : '') + (m.power.pending ? ' pending' : '');
+          r.nodes.power.setAttribute('aria-pressed', String(m.power.active));
+          r.nodes.power.setAttribute('aria-label', 'STARTAG 50K power ' + m.power.label);
+          r.nodes.power.disabled = !!m.power.pending;
+          r.nodes.power.dataset.action = m.power.action;
+        }
         if (r.nodes.board) {
           r.nodes.boardText.textContent = m.board;
           r.nodes.boardBar.style.width = m.fraction === null || m.fraction === undefined ? '0' : Math.round(m.fraction * 100) + '%';
@@ -383,6 +411,19 @@
         }
         if (st.codex) nodes.codex = place(el('div', 'cc-ext-label'), st.codex.x - 1, st.codex.y, 4);
         if (st.proofreader) nodes.proof = place(el('div', 'cc-ext-label'), st.proofreader.x - 1, st.proofreader.y, 4);
+        if (e.worker === 'startag_50k' && st.processor) {
+          nodes.power = place(el('button', 'cc-ext-power', '⏻ OFF'), st.processor.x, st.processor.y, st.processor.w || 2);
+          nodes.power.type = 'button';
+          nodes.power.setAttribute('aria-label', 'STARTAG 50K power OFF');
+          nodes.power.addEventListener('click', async (ev) => {
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            if (nodes.power.disabled) return;
+            const action = nodes.power.dataset.action || 'run';
+            nodes.power.disabled = true;
+            try { await setWorkerPower(e.worker, action); }
+            catch (err) { nodes.power.disabled = false; nodes.power.title = String(err && err.message || err); }
+          });
+        }
         if (st.checkpoint) nodes.cp = place(el('div', 'cc-ext-label cc-ext-cp'), st.checkpoint.x, st.checkpoint.y, st.checkpoint.w + 2);
         if (st.conveyor) nodes.alert = place(el('div', 'cc-ext-alert hidden'), st.conveyor.x - 1, st.conveyor.y + 2, st.conveyor.w + 2);
         extRooms.push({ id: e.worker, nodes });
@@ -395,5 +436,5 @@
     return { refresh, render, renderHud, get overview() { return overview; }, agentMeta: (id) => agentMeta(id, overview), workerModel };
   }
 
-  return { hudModel, levelModel, raceModel, usageModel, plaquesModel, agentMeta, workerModel, activityModel, externalRoomModel, mount, OVERVIEW_URL, POLL_MS };
+  return { hudModel, levelModel, raceModel, usageModel, plaquesModel, agentMeta, workerModel, activityModel, externalRoomModel, mount, workerControlUrl, OVERVIEW_URL, POLL_MS };
 });
