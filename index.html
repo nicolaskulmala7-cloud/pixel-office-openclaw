@@ -83,6 +83,11 @@
         .cc-ext-board-bar { position: absolute; left: 6px; bottom: 2px; height: 2px; background: #f59e0b; max-width: calc(100% - 12px); }
         .cc-ext-label { position: absolute; z-index: 6; margin-top: -6px; font: bold 8px "Courier New", monospace; color: #e5e7eb; text-shadow: 0 1px 0 #000; pointer-events: none; white-space: nowrap; overflow: hidden; }
         .cc-ext-cp { margin-top: 20px; color: #7dd3fc; }
+        .cc-ext-power { position: absolute; z-index: 8; height: 26px; margin-top: 2px; border: 1px solid #4b5563; border-radius: 4px; background: #111827; color: #9ca3af; font: bold 9px "Courier New", monospace; cursor: pointer; box-shadow: inset 0 0 0 1px #030712; }
+        .cc-ext-power:hover:not(:disabled) { border-color: #f59e0b; color: #fcd34d; }
+        .cc-ext-power.on { background: #052e16; border-color: #22c55e; color: #86efac; box-shadow: 0 0 7px rgba(34,197,94,.55); }
+        .cc-ext-power.pending { background: #451a03; border-color: #f59e0b; color: #fde68a; animation: ccBlink 1s steps(2) infinite; }
+        .cc-ext-power:disabled { cursor: wait; opacity: .85; }
         .cc-ext-alert { position: absolute; z-index: 6; font: bold 9px "Courier New", monospace; color: #fef3c7; background: rgba(146, 64, 14, 0.9); padding: 1px 4px; border-radius: 2px; pointer-events: none; white-space: nowrap; overflow: hidden; }
         .cc-ext-alert.hidden, .cc-ext-card.hidden { display: none; }
         .cc-ext-card { position: absolute; right: 8px; top: 8px; width: 300px; z-index: 9; background: rgba(17, 24, 39, 0.96); border: 1px solid #4b5563; border-radius: 6px; padding: 8px 10px; font: 11px "Courier New", monospace; color: #d1d5db; }
