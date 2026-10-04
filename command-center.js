@@ -191,13 +191,12 @@
     if (id === 'startag_50k') {
       const p = w.progress || {};
       const cur = Number.isFinite(p.current) ? p.current : null;
-      const pending = w.control && w.control.pendingAction ? w.control.pendingAction.action : null;
       const active = !stale && ['RUNNING', 'PROOFREADING', 'PROMPT_READY', 'WAITING_LIMIT', 'WAITING_APPROVAL'].includes(status);
       m.power = {
         active,
-        pending,
-        label: (pending === 'run' || pending === 'resume') ? 'STARTING…' : active ? 'ON' : 'OFF',
-        action: active ? null : 'run'
+        pending: null,
+        label: active ? 'ON · OBSERVE' : 'OBSERVE ONLY',
+        action: null
       };
       m.board = stale ? 'STALE / OFFLINE' : (cur === null ? 'NO PROGRESS REPORTED' : cur.toLocaleString('en-US') + ' / ' + STARTAG_TARGET.toLocaleString('en-US'));
       m.fraction = !stale && cur !== null ? Math.max(0, Math.min(1, cur / STARTAG_TARGET)) : null;
@@ -326,15 +325,6 @@
     let cardFor = null;
     cardClose.addEventListener('click', () => { cardFor = null; card.className = 'cc-ext-card hidden'; });
     const workerById = (id) => ((overview && overview.workers) || []).find((x) => x.id === id) || null;
-    async function setWorkerPower(id, action) {
-      const res = await fetchImpl(workerControlUrl(id), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ enabled: true, action: 'run' })
-      });
-      if (!res.ok) throw new Error('worker control HTTP ' + res.status);
-      await refresh();
-    }
     function renderCard() {
       if (!cardFor) return;
       const m = externalRoomModel(cardFor.id, workerById(cardFor.id));
@@ -414,14 +404,10 @@
           nodes.power = place(el('button', 'cc-ext-power', '⏻ OFF'), st.processor.x, st.processor.y, st.processor.w || 2);
           nodes.power.type = 'button';
           nodes.power.setAttribute('aria-label', 'STARTAG 50K power OFF');
-          nodes.power.addEventListener('click', async (ev) => {
+          nodes.power.disabled = true;
+          nodes.power.title = 'Observe-only: STARTAG Codex Desktop control is not wired.';
+          nodes.power.addEventListener('click', (ev) => {
             if (ev && ev.stopPropagation) ev.stopPropagation();
-            if (nodes.power.disabled) return;
-            const action = nodes.power.dataset.action;
-            if (!action) return;
-            nodes.power.disabled = true;
-            try { await setWorkerPower(e.worker, action); }
-            catch (err) { nodes.power.disabled = false; nodes.power.title = String(err && err.message || err); }
           });
         }
         if (st.checkpoint) nodes.cp = place(el('div', 'cc-ext-label cc-ext-cp'), st.checkpoint.x, st.checkpoint.y, st.checkpoint.w + 2);
