@@ -188,29 +188,28 @@ test('saved rooms from before the kind field still get kind/workerId from the ge
 });
 
 
-test('STARTAG room exposes a real power control mapped to the existing worker control endpoint', () => {
-  assert.equal(CC.workerControlUrl('startag_50k'), '/api/workers/startag_50k/control');
-
+test('STARTAG room power surface is observe-only until Desktop control is proven', () => {
   const off = CC.externalRoomModel('startag_50k', {
     id: 'startag_50k', status: 'OFFLINE', stale: true, lastSeenAt: 1,
     control: { enabled: true, pendingAction: null }
   });
-  assert.deepEqual([off.power.label, off.power.action, off.power.active], ['OBSERVE ONLY', null, false]);
+  assert.deepEqual([off.power.label, off.power.action, off.power.active, off.power.pending], ['OBSERVE ONLY', null, false, null]);
 
   const running = CC.externalRoomModel('startag_50k', {
     id: 'startag_50k', status: 'RUNNING', stale: false, lastSeenAt: Date.now(),
     control: { enabled: true, pendingAction: null }
   });
-  assert.deepEqual([running.power.label, running.power.action, running.power.active], ['ON · OBSERVE', null, true]);
+  assert.deepEqual([running.power.label, running.power.action, running.power.active, running.power.pending], ['ON · OBSERVE', null, true, null]);
 
-  const starting = CC.externalRoomModel('startag_50k', {
+  const staleQueuedRun = CC.externalRoomModel('startag_50k', {
     id: 'startag_50k', status: 'OFFLINE', stale: true, lastSeenAt: 1,
     control: { enabled: true, pendingAction: { action: 'run' } }
   });
-  assert.equal(starting.power.label, 'STARTING…');
+  assert.deepEqual([staleQueuedRun.power.label, staleQueuedRun.power.action, staleQueuedRun.power.pending], ['OBSERVE ONLY', null, null]);
 
   const src = fs.readFileSync(path.join(REPO, 'command-center.js'), 'utf8');
-  assert.match(src, /setWorkerPower\(e\.worker, action\)/);
-  assert.match(src, /\{ enabled: true, action: 'run' \}/);
-  assert.doesNotMatch(src, /setWorkerPower\(e\.worker, 'pause'\)|\{ enabled: false, action: 'pause' \}/);
+  assert.doesNotMatch(src, /setWorkerPower\(/);
+  assert.doesNotMatch(src, /fetchImpl\(workerControlUrl\(id\)/);
+  assert.match(src, /Observe-only: STARTAG Codex Desktop control is not wired/);
+  assert.match(src, /nodes\.power\.disabled = true/);
 });
