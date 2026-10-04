@@ -195,13 +195,13 @@ test('STARTAG room exposes a real power control mapped to the existing worker co
     id: 'startag_50k', status: 'OFFLINE', stale: true, lastSeenAt: 1,
     control: { enabled: true, pendingAction: null }
   });
-  assert.deepEqual([off.power.label, off.power.action, off.power.active], ['OFF', 'run', false]);
+  assert.deepEqual([off.power.label, off.power.action, off.power.active], ['OBSERVE ONLY', null, false]);
 
   const running = CC.externalRoomModel('startag_50k', {
     id: 'startag_50k', status: 'RUNNING', stale: false, lastSeenAt: Date.now(),
     control: { enabled: true, pendingAction: null }
   });
-  assert.deepEqual([running.power.label, running.power.action, running.power.active], ['ON', null, true]);
+  assert.deepEqual([running.power.label, running.power.action, running.power.active], ['ON · OBSERVE', null, true]);
 
   const starting = CC.externalRoomModel('startag_50k', {
     id: 'startag_50k', status: 'OFFLINE', stale: true, lastSeenAt: 1,
