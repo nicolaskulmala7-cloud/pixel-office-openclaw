@@ -460,7 +460,8 @@ const WORKER_STATUSES = [
   'SEAT_FOUND',
   'ALERTING',
   'ERROR',
-  'OFFLINE'
+  'OFFLINE',
+  'UNKNOWN'
 ];
 
 let workerFeed = readJSONFile(WORKERS_PATH) || { updatedAt: 0, workers: {} };
